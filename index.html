@@ -1,526 +1,429 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="pl" data-color-scheme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GIS Microclimate Platform - Professional Edition</title>
+    <title>GIS Mikroklima - Profesjonalna Platforma Analityczna v2.3.0</title>
     
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+    <link rel="stylesheet" 
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossorigin=""/>
     
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <!-- Main CSS -->
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loading-overlay">
         <div class="loading-content">
             <div class="loading-spinner"></div>
-            <h3>Ładowanie Platformy GIS</h3>
-            <p>Przygotowywanie danych mikroklimatu...</p>
+            <h3>Ładowanie aplikacji...</h3>
+            <p>Przygotowywanie modułów GIS i wizualizacji mikroklimatu</p>
         </div>
     </div>
 
     <!-- Toast Container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <!-- Data Tooltip -->
-    <div class="data-tooltip" id="data-tooltip"></div>
-
-    <div class="app-container">
-        <!-- Sidebar -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
                 <div class="logo">
-                    <i class="fas fa-wind"></i>
-                    <span>GIS Microclimate</span>
+                    <h1><i class="fas fa-leaf"></i> GIS Mikroklima</h1>
+                    <span class="version">v2.3.0 Enhanced</span>
                 </div>
-                <button class="sidebar-toggle" id="sidebar-toggle">
-                    <i class="fas fa-bars"></i>
-                </button>
-            </div>
-
-            <nav class="nav-menu">
-                <a href="#" class="nav-item active" data-module="dashboard">
-                    <i class="fas fa-tachometer-alt"></i>
-                    <span>Dashboard</span>
-                </a>
-                <a href="#" class="nav-item" data-module="wind">
-                    <i class="fas fa-wind"></i>
-                    <span>Analiza Wiatru</span>
-                </a>
-                <a href="#" class="nav-item" data-module="vegetation">
-                    <i class="fas fa-leaf"></i>
-                    <span>Wegetacja</span>
-                </a>
-                <a href="#" class="nav-item" data-module="thermal">
-                    <i class="fas fa-thermometer-half"></i>
-                    <span>Komfort Termiczny</span>
-                </a>
-                <a href="#" class="nav-item" data-module="scenarios">
-                    <i class="fas fa-layer-group"></i>
-                    <span>Scenariusze</span>
-                </a>
-                <a href="#" class="nav-item" data-module="export">
-                    <i class="fas fa-download"></i>
-                    <span>Eksport</span>
-                </a>
-            </nav>
-
-            <div class="sidebar-footer">
-                <div class="system-info">
-                    <div class="info-item">
-                        <i class="fas fa-code-branch"></i>
-                        <span class="version">v2.3.0</span>
-                    </div>
-                    <div class="info-item">
-                        <i class="fas fa-server"></i>
-                        <span>Platform Active</span>
-                    </div>
+                <nav class="nav">
+                    <button class="btn btn--outline nav-btn" data-module="dashboard">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </button>
+                    <button class="btn btn--outline nav-btn" data-module="wind">
+                        <i class="fas fa-wind"></i> Analiza Wiatru
+                    </button>
+                    <button class="btn btn--outline nav-btn" data-module="vegetation">
+                        <i class="fas fa-tree"></i> Wegetacja
+                    </button>
+                    <button class="btn btn--outline nav-btn" data-module="thermal">
+                        <i class="fas fa-thermometer-half"></i> Komfort Termiczny
+                    </button>
+                    <button class="btn btn--outline nav-btn" data-module="scenarios">
+                        <i class="fas fa-layer-group"></i> Scenariusze
+                    </button>
+                    <button class="btn btn--outline nav-btn" data-module="export">
+                        <i class="fas fa-download"></i> Eksport
+                    </button>
+                </nav>
+                <div class="header-actions">
+                    <button class="btn btn--secondary" id="connection-btn">
+                        <i class="fas fa-wifi"></i> Połącz z API
+                    </button>
                 </div>
             </div>
-        </aside>
+        </div>
+    </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Header -->
-            <header class="header">
-                <div class="header-left">
-                    <nav class="breadcrumbs" id="breadcrumbs">
-                        <span class="breadcrumb-item active">Dashboard</span>
-                    </nav>
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <!-- Dashboard Module -->
+            <div class="module" id="module-dashboard">
+                <div class="module-header">
+                    <h2><i class="fas fa-tachometer-alt"></i> Dashboard - Przegląd Mikroklimatu</h2>
+                    <p>Analiza mikroklimatu w czasie rzeczywistym z monitoringiem systemowym</p>
                 </div>
-                
-                <div class="header-right">
-                    <div class="header-actions">
-                        <div class="api-status" id="api-status">
-                            <i class="fas fa-circle status-warning"></i>
-                            <span>Sample Mode</span>
+
+                <div class="data-panels-grid">
+                    <!-- Quick Stats Panel -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3><i class="fas fa-chart-line"></i> Szybkie Statystyki</h3>
                         </div>
-                        
-                        <button class="btn btn-icon" id="refresh-btn" title="Odśwież dane">
-                            <i class="fas fa-sync-alt"></i>
+                        <div class="panel-content">
+                            <div class="data-grid">
+                                <div class="data-item">
+                                    <div class="data-label">Średnia prędkość wiatru</div>
+                                    <div class="data-value" id="avg-wind-speed">3.2 m/s</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Czas obliczeń</div>
+                                    <div class="data-value" id="computation-time">12.4s</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Temperatura</div>
+                                    <div class="data-value" id="temperature">18.5°C</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Jakość danych</div>
+                                    <div class="data-value quality-high" id="data-quality">Wysoka</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Map Overview Panel -->
+                    <div class="panel map-panel">
+                        <div class="panel-header">
+                            <h3><i class="fas fa-map"></i> Lokalizacje Badań</h3>
+                        </div>
+                        <div class="panel-content">
+                            <div id="dashboard-map" class="dashboard-map"></div>
+                            <div class="map-legend">
+                                <div class="legend-item">
+                                    <div class="legend-marker active"></div>
+                                    <span>Aktywne stacje</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-marker planned"></div>
+                                    <span>Planowane lokalizacje</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Status Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3><i class="fas fa-server"></i> Status Systemu</h3>
+                    </div>
+                    <div class="panel-content">
+                        <div class="status-grid">
+                            <div class="status-item">
+                                <span>Status połączenia</span>
+                                <span class="status status--info" id="connection-status">Rozłączony</span>
+                            </div>
+                            <div class="status-item">
+                                <span>Ostatnia aktualizacja</span>
+                                <span id="last-update">--</span>
+                            </div>
+                            <div class="status-item">
+                                <span>Symulacja LBM</span>
+                                <span class="status status--success">Gotowa</span>
+                            </div>
+                            <div class="status-item">
+                                <span>Dane pogodowe</span>
+                                <span class="status status--success">Aktualne</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity Log Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3><i class="fas fa-history"></i> Ostatnia Aktywność</h3>
+                    </div>
+                    <div class="panel-content">
+                        <div class="activity-list" id="activity-list">
+                            <div class="activity-item">
+                                <div class="activity-icon"><i class="fas fa-check-circle"></i></div>
+                                <div class="activity-content">
+                                    <h4>Symulacja wiatru zakończona</h4>
+                                    <p>Obliczenia LBM dla siatki 850×680 zakończone pomyślnie.</p>
+                                    <small>2 minuty temu</small>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon"><i class="fas fa-sync-alt"></i></div>
+                                <div class="activity-content">
+                                    <h4>Dane zaktualizowane</h4>
+                                    <p>Nowe dane wejściowe załadowane z GitHub Repository.</p>
+                                    <small>5 minut temu</small>
+                                </div>
+                            </div>
+                            <div class="activity-item">
+                                <div class="activity-icon"><i class="fas fa-wind"></i></div>
+                                <div class="activity-content">
+                                    <h4>Warunki pogodowe</h4>
+                                    <p>Prędkość wiatru 4.2 m/s, kierunek SW (225°).</p>
+                                    <small>10 minut temu</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wind Analysis Module -->
+            <div class="module hidden" id="module-wind">
+                <div class="module-header">
+                    <h2><i class="fas fa-wind"></i> Analiza Przepływu Wiatru</h2>
+                    <p>Profesjonalna symulacja LBM (Lattice Boltzmann Method) z wizualizacją</p>
+                </div>
+
+                <!-- Wind Controls Panel -->
+                <div class="controls-panel">
+                    <div class="control-group">
+                        <label for="viz-mode">Tryb wizualizacji</label>
+                        <select id="viz-mode" class="form-control">
+                            <option value="particles">Cząsteczki</option>
+                            <option value="streamlines">Linie prądu</option>
+                            <option value="vectors">Wektory</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="opacity-slider">Przezroczystość (<span id="opacity-value">80</span>%)</label>
+                        <input type="range" id="opacity-slider" class="range-slider" min="10" max="100" value="80">
+                    </div>
+                    <div class="control-group">
+                        <label for="particle-count">Liczba cząsteczek</label>
+                        <select id="particle-count" class="form-control">
+                            <option value="1000">1,000</option>
+                            <option value="3000">3,000</option>
+                            <option value="5000" selected>5,000</option>
+                            <option value="8000">8,000</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <button class="btn btn--primary" id="refresh-simulation">
+                            <i class="fas fa-sync-alt"></i> Odśwież Symulację
                         </button>
-                        
-                        <button class="btn btn-primary" id="export-btn">
-                            <i class="fas fa-download"></i>
-                            <span>Eksport</span>
-                        </button>
                     </div>
                 </div>
-            </header>
 
-            <!-- Content Wrapper -->
-            <div class="content-wrapper">
-                <!-- Dashboard Module -->
-                <div class="module active" id="dashboard-module">
-                    <div class="module-header">
-                        <h1>Dashboard - Przegląd Mikroklimatu</h1>
-                        <p>Analiza mikroklimatu w czasie rzeczywistym z monitoringiem systemowym</p>
+                <!-- Wind Visualization Container -->
+                <div class="visualization-container">
+                    <div id="wind-map" class="wind-map"></div>
+                    <canvas id="wind-canvas" class="wind-canvas"></canvas>
+                    
+                    <!-- Canvas Legend -->
+                    <div class="canvas-legend">
+                        <h4><i class="fas fa-palette"></i> Prędkość wiatru</h4>
+                        <div class="legend-gradient"></div>
+                        <div class="legend-labels">
+                            <span>0</span>
+                            <span>2</span>
+                            <span>4</span>
+                            <span>6+ m/s</span>
+                        </div>
                     </div>
+                    
+                    <!-- Particle Indicator -->
+                    <div class="particle-indicator" id="particle-indicator">
+                        Aktywne cząsteczki: <span id="active-particles">0</span>
+                    </div>
+                </div>
 
-                    <!-- KPI Cards -->
-                    <div class="kpi-grid">
-                        <div class="kpi-card">
-                            <div class="kpi-icon wind">
-                                <i class="fas fa-wind"></i>
-                            </div>
-                            <div class="kpi-content">
-                                <h3>Średnia prędkość wiatru</h3>
-                                <div class="kpi-value">3.8 m/s</div>
-                                <div class="kpi-change positive">
-                                    <i class="fas fa-arrow-up"></i>
-                                    5% od ostatniej aktualizacji
-                                </div>
-                            </div>
+                <!-- Wind Data Panels -->
+                <div class="data-panels-grid">
+                    <!-- Flow Statistics Panel -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3><i class="fas fa-chart-bar"></i> Statystyki Przepływu</h3>
                         </div>
-
-                        <div class="kpi-card">
-                            <div class="kpi-icon performance">
-                                <i class="fas fa-clock"></i>
-                            </div>
-                            <div class="kpi-content">
-                                <h3>Czas obliczeń</h3>
-                                <div class="kpi-value">45.2s</div>
-                                <div class="kpi-change neutral">
-                                    <i class="fas fa-minus"></i>
-                                    Stabilna wydajność
+                        <div class="panel-content">
+                            <div class="data-grid">
+                                <div class="data-item">
+                                    <div class="data-label">Maks. prędkość</div>
+                                    <div class="data-value" id="max-velocity">6.8 m/s</div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div class="kpi-card">
-                            <div class="kpi-icon temperature">
-                                <i class="fas fa-thermometer-half"></i>
-                            </div>
-                            <div class="kpi-content">
-                                <h3>Temperatura</h3>
-                                <div class="kpi-value">18.5°C</div>
-                                <div class="kpi-change neutral">
-                                    <i class="fas fa-check"></i>
-                                    Zakres normalny
+                                <div class="data-item">
+                                    <div class="data-label">Śr. prędkość</div>
+                                    <div class="data-value" id="avg-velocity">3.2 m/s</div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div class="kpi-card">
-                            <div class="kpi-icon data">
-                                <i class="fas fa-database"></i>
-                            </div>
-                            <div class="kpi-content">
-                                <h3>Jakość danych</h3>
-                                <div class="kpi-value">8,456 pts</div>
-                                <div class="kpi-change positive">
-                                    <i class="fas fa-star"></i>
-                                    Wysoka rozdzielczość
+                                <div class="data-item">
+                                    <div class="data-label">Turbulencja</div>
+                                    <div class="data-value" id="turbulence">12.5%</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Wortyczność</div>
+                                    <div class="data-value" id="vorticity">0.042 s⁻¹</div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Dashboard Grid -->
-                    <div class="dashboard-grid">
-                        <!-- Map Panel -->
-                        <div class="panel map-panel">
-                            <div class="panel-header">
-                                <h3><i class="fas fa-map-marked-alt"></i> Lokalizacje Badań</h3>
-                                <div class="panel-actions">
-                                    <button class="btn btn-icon" id="map-refresh">
-                                        <i class="fas fa-sync-alt"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="panel-content">
-                                <div id="dashboard-map" class="dashboard-map"></div>
-                                <div class="map-legend">
-                                    <div class="legend-item">
-                                        <div class="legend-marker active"></div>
-                                        <span>Aktywna lokalizacja</span>
-                                    </div>
-                                    <div class="legend-item">
-                                        <div class="legend-marker planned"></div>
-                                        <span>Planowane</span>
-                                    </div>
-                                </div>
-                            </div>
+                    <!-- Weather Conditions Panel -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3><i class="fas fa-cloud-sun"></i> Warunki Pogodowe</h3>
                         </div>
-
-                        <!-- System Status Panel -->
-                        <div class="panel">
-                            <div class="panel-header">
-                                <h3><i class="fas fa-server"></i> Status Systemu</h3>
-                            </div>
-                            <div class="panel-content">
-                                <div class="status-grid">
-                                    <div class="status-item">
-                                        <span class="status-label">Moduł Wiatru</span>
-                                        <span class="status-value">
-                                            <span class="status status--success">Aktywny</span>
-                                        </span>
-                                    </div>
-                                    <div class="status-item">
-                                        <span class="status-label">Połączenie danych</span>
-                                        <span class="status-value">
-                                            <span class="status status--warning">Tryb próbek</span>
-                                        </span>
-                                    </div>
-                                    <div class="status-item">
-                                        <span class="status-label">Ostatnia aktualizacja</span>
-                                        <span class="status-value">--:--</span>
-                                    </div>
-                                    <div class="status-item">
-                                        <span class="status-label">Auto-odświeżanie</span>
-                                        <label class="toggle">
-                                            <input type="checkbox" id="auto-refresh-toggle">
-                                            <span class="toggle-slider"></span>
-                                        </label>
-                                    </div>
+                        <div class="panel-content">
+                            <div class="data-grid">
+                                <div class="data-item">
+                                    <div class="data-label">Kierunek wiatru</div>
+                                    <div class="data-value" id="wind-direction">SW (225°)</div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <!-- Quick Stats Panel -->
-                        <div class="panel stats-panel">
-                            <div class="panel-header">
-                                <h3><i class="fas fa-chart-bar"></i> Szybkie Statystyki</h3>
-                            </div>
-                            <div class="panel-content">
-                                <div class="stats-grid">
-                                    <div class="stat-item">
-                                        <div class="stat-label">Rozdzielczość siatki</div>
-                                        <div class="stat-value">850×680</div>
-                                    </div>
-                                    <div class="stat-item">
-                                        <div class="stat-label">Budynki przeanalizowane</div>
-                                        <div class="stat-value">2,556</div>
-                                    </div>
-                                    <div class="stat-item">
-                                        <div class="stat-label">Przeszkody przepływu</div>
-                                        <div class="stat-value">1,250</div>
-                                    </div>
-                                    <div class="stat-item">
-                                        <div class="stat-label">Czas obliczeń</div>
-                                        <div class="stat-value">45.2s</div>
-                                    </div>
+                                <div class="data-item">
+                                    <div class="data-label">Prędkość podstawowa</div>
+                                    <div class="data-value" id="base-wind-speed">4.2 m/s</div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <!-- Activity Panel -->
-                        <div class="panel activity-panel">
-                            <div class="panel-header">
-                                <h3><i class="fas fa-history"></i> Ostatnia Aktywność</h3>
-                            </div>
-                            <div class="panel-content">
-                                <div class="activity-list" id="activity-list">
-                                    <div class="activity-item">
-                                        <div class="activity-icon wind">
-                                            <i class="fas fa-wind"></i>
-                                        </div>
-                                        <div class="activity-content">
-                                            <h4>Symulacja wiatru zakończona</h4>
-                                            <p>Obliczenia LBM dla siatki 850×680 zakończone pomyślnie.</p>
-                                            <div class="activity-time">15:42</div>
-                                        </div>
-                                    </div>
-                                    <div class="activity-item">
-                                        <div class="activity-icon data">
-                                            <i class="fas fa-database"></i>
-                                        </div>
-                                        <div class="activity-content">
-                                            <h4>Dane zaktualizowane</h4>
-                                            <p>Nowe dane wejściowe załadowane z Google Drive.</p>
-                                            <div class="activity-time">15:38</div>
-                                        </div>
-                                    </div>
-                                    <div class="activity-item">
-                                        <div class="activity-icon weather">
-                                            <i class="fas fa-cloud-sun"></i>
-                                        </div>
-                                        <div class="activity-content">
-                                            <h4>Warunki pogodowe</h4>
-                                            <p>Prędkość wiatru 4.2 m/s, kierunek SW (225°).</p>
-                                            <div class="activity-time">15:35</div>
-                                        </div>
-                                    </div>
+                                <div class="data-item">
+                                    <div class="data-label">Temperatura</div>
+                                    <div class="data-value" id="air-temperature">18.5°C</div>
+                                </div>
+                                <div class="data-item">
+                                    <div class="data-label">Ciśnienie</div>
+                                    <div class="data-value" id="pressure">1013 hPa</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Wind Analysis Module -->
-                <div class="module" id="wind-module">
-                    <div class="module-header">
-                        <h1>Analiza Przepływu Wiatru</h1>
-                        <p>Profesjonalna symulacja LBM (Lattice Boltzmann Method) z wizualizacją</p>
+                <!-- Simulation Details Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3><i class="fas fa-cogs"></i> Szczegóły Symulacji</h3>
                     </div>
-
-                    <!-- Controls Panel -->
-                    <div class="controls-panel">
-                        <div class="control-group">
-                            <label for="viz-mode">Tryb wizualizacji</label>
-                            <select id="viz-mode" class="form-control">
-                                <option value="particles">Cząsteczki</option>
-                                <option value="streamlines">Linie prądu</option>
-                                <option value="magnitude" selected>Magnitud prędkości</option>
-                                <option value="combined">Połączone</option>
-                            </select>
-                        </div>
-
-                        <div class="control-group">
-                            <label for="opacity-slider">Przezroczystość (%)</label>
-                            <input type="range" id="opacity-slider" class="range-slider" min="10" max="100" value="80">
-                            <span class="range-value">80%</span>
-                        </div>
-
-                        <div class="control-group">
-                            <label for="particle-count">Liczba cząsteczek</label>
-                            <select id="particle-count" class="form-control">
-                                <option value="1000">1,000</option>
-                                <option value="5000" selected>5,000</option>
-                                <option value="10000">10,000</option>
-                                <option value="25000">25,000</option>
-                            </select>
-                        </div>
-
-                        <div class="control-group">
-                            <button class="btn btn-primary" id="reset-view">
-                                <i class="fas fa-undo"></i>
-                                Reset widoku
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Visualization Container -->
-                    <div class="visualization-container">
-                        <div id="wind-map" class="wind-map"></div>
-                        <canvas id="wind-canvas" class="wind-canvas"></canvas>
-                        
-                        <div class="canvas-overlay">
-                            <div class="canvas-legend">
-                                <h4>Prędkość wiatru</h4>
-                                <div class="legend-gradient"></div>
-                                <div class="legend-labels">
-                                    <span>0.2</span>
-                                    <span>4.5</span>
-                                    <span>8.5 m/s</span>
-                                </div>
+                    <div class="panel-content">
+                        <div class="data-grid">
+                            <div class="data-item">
+                                <div class="data-label">Rozmiar siatki</div>
+                                <div class="data-value" id="grid-size">850 × 680</div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Data Panels -->
-                    <div class="data-panels-grid">
-                        <!-- Flow Statistics -->
-                        <div class="panel">
-                            <div class="panel-header">
-                                <h3><i class="fas fa-chart-line"></i> Statystyki Przepływu</h3>
+                            <div class="data-item">
+                                <div class="data-label">Iteracje LBM</div>
+                                <div class="data-value" id="lbm-iterations">4,000</div>
                             </div>
-                            <div class="panel-content">
-                                <div class="data-grid">
-                                    <div class="data-item">
-                                        <div class="data-label">Min. prędkość</div>
-                                        <div class="data-value">0.20 m/s</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Max. prędkość</div>
-                                        <div class="data-value">8.50 m/s</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Średnia prędkość</div>
-                                        <div class="data-value">3.80 m/s</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Odchylenie std.</div>
-                                        <div class="data-value">1.90 m/s</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Mediana prędkości</div>
-                                        <div class="data-value">3.50 m/s</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">95. percentyl</div>
-                                        <div class="data-value">7.20 m/s</div>
-                                    </div>
-                                </div>
+                            <div class="data-item">
+                                <div class="data-label">Czas obliczeń</div>
+                                <div class="data-value" id="compute-time">12.4s</div>
                             </div>
-                        </div>
-
-                        <!-- Weather Conditions -->
-                        <div class="panel">
-                            <div class="panel-header">
-                                <h3><i class="fas fa-cloud-sun"></i> Warunki Pogodowe</h3>
-                            </div>
-                            <div class="panel-content">
-                                <div class="data-grid">
-                                    <div class="data-item">
-                                        <div class="data-label">Aktualny wiatr</div>
-                                        <div class="data-value">4.2 m/s SW</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Temperatura</div>
-                                        <div class="data-value">18.5°C</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Wilgotność</div>
-                                        <div class="data-value">65%</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Źródło danych</div>
-                                        <div class="data-value">Próbka</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Simulation Details -->
-                        <div class="panel">
-                            <div class="panel-header">
-                                <h3><i class="fas fa-cogs"></i> Szczegóły Symulacji</h3>
-                            </div>
-                            <div class="panel-content">
-                                <div class="data-grid">
-                                    <div class="data-item">
-                                        <div class="data-label">Rozdzielczość siatki</div>
-                                        <div class="data-value">850×680</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Rozdzielczość pikseli</div>
-                                        <div class="data-value">2.5 m</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Czas obliczeń</div>
-                                        <div class="data-value">45.2s</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Wersja platformy</div>
-                                        <div class="data-value">2.3.0</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Ostatnia aktualizacja</div>
-                                        <div class="data-value">--</div>
-                                    </div>
-                                    <div class="data-item">
-                                        <div class="data-label">Źródło danych</div>
-                                        <div class="data-value">Dane próbek</div>
-                                    </div>
-                                </div>
+                            <div class="data-item">
+                                <div class="data-label">Wydajność</div>
+                                <div class="data-value" id="performance">322 it/s</div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Other modules (vegetation, thermal, scenarios, export) remain the same -->
-                <div class="module" id="vegetation-module">
-                    <div class="coming-soon">
-                        <i class="fas fa-leaf fa-3x"></i>
-                        <h3>Analiza Wegetacji</h3>
-                        <p>Ten moduł jest obecnie w fazie rozwoju i będzie dostępny w przyszłych aktualizacjach.</p>
+            <!-- Placeholder modules -->
+            <div class="module hidden" id="module-vegetation">
+                <div class="module-header">
+                    <h2><i class="fas fa-tree"></i> Analiza Wegetacji</h2>
+                </div>
+                <div class="panel coming-soon">
+                    <div class="panel-content">
+                        <h3>Ten moduł jest obecnie w fazie rozwoju i będzie dostępny w przyszłych aktualizacjach.</h3>
                         <p>Oczekujcie zaawansowanych możliwości analizy wegetacji!</p>
                     </div>
                 </div>
+            </div>
 
-                <div class="module" id="thermal-module">
-                    <div class="coming-soon">
-                        <i class="fas fa-thermometer-half fa-3x"></i>
-                        <h3>Komfort Termiczny</h3>
-                        <p>Ten moduł jest obecnie w fazie rozwoju i będzie dostępny w przyszłych aktualizacjach.</p>
+            <div class="module hidden" id="module-thermal">
+                <div class="module-header">
+                    <h2><i class="fas fa-thermometer-half"></i> Komfort Termiczny</h2>
+                </div>
+                <div class="panel coming-soon">
+                    <div class="panel-content">
+                        <h3>Ten moduł jest obecnie w fazie rozwoju i będzie dostępny w przyszłych aktualizacjach.</h3>
                         <p>Oczekujcie zaawansowanych możliwości analizy komfortu termicznego!</p>
                     </div>
                 </div>
+            </div>
 
-                <div class="module" id="scenarios-module">
-                    <div class="coming-soon">
-                        <i class="fas fa-layer-group fa-3x"></i>
-                        <h3>Zarządzanie Scenariuszami</h3>
-                        <p>Ten moduł jest obecnie w fazie rozwoju i będzie dostępny w przyszłych aktualizacjach.</p>
+            <div class="module hidden" id="module-scenarios">
+                <div class="module-header">
+                    <h2><i class="fas fa-layer-group"></i> Zarządzanie Scenariuszami</h2>
+                </div>
+                <div class="panel coming-soon">
+                    <div class="panel-content">
+                        <h3>Ten moduł jest obecnie w fazie rozwoju i będzie dostępny w przyszłych aktualizacjach.</h3>
                         <p>Oczekujcie zaawansowanych możliwości zarządzania scenariuszami!</p>
                     </div>
                 </div>
+            </div>
 
-                <div class="module" id="export-module">
-                    <div class="coming-soon">
-                        <i class="fas fa-download fa-3x"></i>
-                        <h3>Eksport i Raporty</h3>
-                        <p>Ten moduł jest obecnie w fazie rozwoju i będzie dostępny w przyszłych aktualizacjach.</p>
+            <div class="module hidden" id="module-export">
+                <div class="module-header">
+                    <h2><i class="fas fa-download"></i> Eksport i Raporty</h2>
+                </div>
+                <div class="panel coming-soon">
+                    <div class="panel-content">
+                        <h3>Ten moduł jest obecnie w fazie rozwoju i będzie dostępny w przyszłych aktualizacjach.</h3>
                         <p>Oczekujcie zaawansowanych możliwości eksportu i raportów!</p>
                     </div>
                 </div>
             </div>
-        </main>
-    </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>GIS Mikroklima Platform v2.3.0</h4>
+                    <p>Profesjonalna platforma do analizy mikroklimatu z zaawansowanymi narzędziami wizualizacji i symulacji.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Funkcje</h4>
+                    <ul>
+                        <li>Symulacja LBM przepływu wiatru</li>
+                        <li>Wizualizacja z Leaflet OpenStreetMap</li>
+                        <li>Analiza danych w czasie rzeczywistym</li>
+                        <li>Eksport wyników i raportowanie</li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Technologie</h4>
+                    <ul>
+                        <li>JavaScript ES6+ & Canvas API</li>
+                        <li>Leaflet.js & OpenStreetMap</li>
+                        <li>Python Numba & LBM Algorithm</li>
+                        <li>GitHub Pages & Actions CI/CD</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 GIS Mikroklima Platform. Enhanced edition with Leaflet integration.</p>
+            </div>
+        </div>
+    </footer>
 
     <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
     
-    <!-- Main Application Script -->
-    <script src="app_upgraded.js"></script>
+    <!-- Main Application Script - POPRAWIONA NAZWA PLIKU -->
+    <script src="app.js"></script>
 </body>
 </html>
