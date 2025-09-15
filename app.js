@@ -384,38 +384,32 @@ class GISMicroclimatePlatform {
   
   // Setup canvas for wind visualizations
   setupCanvas() {
-  this.canvas = document.getElementById('wind-canvas');
-  if (!this.canvas) return;
-  this.ctx = this.canvas.getContext('2d');
-  this.resizeCanvas();
-  // ResizeObserver – zawsze dostosuj wielkość i przerysuj
-  const container = this.canvas.parentElement;
-  this.ro = new ResizeObserver(() => {
+    this.canvas = document.getElementById('wind-canvas');
+    if (!this.canvas) return;
+    
+    this.ctx = this.canvas.getContext('2d');
     this.resizeCanvas();
-    if (this.state.currentModule === 'wind' && this.state.windData) {
-      this.renderWindVisualization();
-    }
-  });
-  this.ro.observe(container);
-}
-
-renderWindVisualization() {
-  if (!this.canvas || !this.ctx || !this.state.windData) return;
-  this.resizeCanvas();  // przed każdym rysowaniem!
-  const canvas = this.canvas;
-  const ctx = this.ctx;;
-      
-      // Handle window resize
-      window.addEventListener('resize', () => {
-        this.resizeCanvas();
-        if (this.state.currentModule === 'wind' && this.state.windData) {
-          this.renderWindVisualization();
-        }
-      });
-      
-      // Handle canvas interactions
-      this.setupCanvasInteractions();
-    }
+    
+    // ResizeObserver – zawsze dostosuj wielkość i przerysuj
+    const container = this.canvas.parentElement;
+    this.ro = new ResizeObserver(() => {
+      this.resizeCanvas();
+      if (this.state.currentModule === 'wind' && this.state.windData) {
+        this.renderWindVisualization();
+      }
+    });
+    this.ro.observe(container);
+    
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      this.resizeCanvas();
+      if (this.state.currentModule === 'wind' && this.state.windData) {
+        this.renderWindVisualization();
+      }
+    });
+    
+    // Handle canvas interactions
+    this.setupCanvasInteractions();
   }
   
   // Setup canvas interactions (zoom, pan, etc.)
@@ -856,6 +850,8 @@ renderWindVisualization() {
       console.warn('⚠️  Cannot render: missing canvas, context, or data');
       return;
     }
+    
+    this.resizeCanvas(); // przed każdym rysowaniem!
     
     console.log('🎨 Rendering wind visualization');
     
