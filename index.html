@@ -1,137 +1,540 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wizualizacja Mikroklimatu - Analiza Przepływu Wiatru</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="style.css">
+    <title>Professional GIS Microclimate Platform</title>
+    
+    <!-- Meta tags for SEO and social sharing -->
+    <meta name="description" content="Professional GIS Microclimate Platform - Advanced wind flow analysis and urban climate modeling">
+    <meta name="keywords" content="GIS, microclimate, wind analysis, urban planning, CFD, LBM simulation">
+    <meta name="author" content="Professional GIS Microclimate Platform">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Professional GIS Microclimate Platform">
+    <meta property="og:description" content="Advanced wind flow analysis and urban climate modeling platform">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:title" content="Professional GIS Microclimate Platform">
+    <meta property="twitter:description" content="Advanced wind flow analysis and urban climate modeling platform">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="./favicon.ico">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" 
+          integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" 
+          crossorigin="anonymous" referrerpolicy="no-referrer">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Main stylesheet -->
+    <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-    <div class="app-container">
-        <!-- Panel kontrolny -->
-        <div class="control-panel" id="controlPanel">
-            <div class="panel-header">
-                <h3>Kontrola Warstw</h3>
-                <button class="btn btn--sm" id="togglePanel" aria-label="Zwiń/rozwiń panel">←</button>
-            </div>
-            
-            <div class="panel-content">
-                <!-- Warstwy -->
-                <div class="control-section">
-                    <h4>Warstwy Mapy</h4>
-                    <div class="layer-controls">
-                        <label class="layer-checkbox">
-                            <input type="checkbox" id="windParticles" checked>
-                            <span>Cząsteczki wiatru</span>
-                        </label>
-                        <label class="layer-checkbox">
-                            <input type="checkbox" id="windStreamlines">
-                            <span>Streamlines</span>
-                        </label>
-                        <label class="layer-checkbox">
-                            <input type="checkbox" id="buildings">
-                            <span>Budynki</span>
-                        </label>
-                        <label class="layer-checkbox">
-                            <input type="checkbox" id="windContours">
-                            <span>Kontury prędkości</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Kontrolki animacji -->
-                <div class="control-section">
-                    <h4>Animacja</h4>
-                    <div class="slider-group">
-                        <label for="particleCount">Liczba cząsteczek: <span id="particleCountValue">1000</span></label>
-                        <input type="range" id="particleCount" min="100" max="5000" value="1000" step="100" class="slider">
-                    </div>
-                    <div class="slider-group">
-                        <label for="animationSpeed">Prędkość: <span id="animationSpeedValue">1.0x</span></label>
-                        <input type="range" id="animationSpeed" min="0.1" max="2.0" value="1.0" step="0.1" class="slider">
-                    </div>
-                </div>
-
-                <!-- Styl wizualizacji -->
-                <div class="control-section">
-                    <h4>Wizualizacja</h4>
-                    <select id="visualStyle" class="form-control">
-                        <option value="particles">Cząsteczki</option>
-                        <option value="streamlines">Streamlines</option>
-                        <option value="both">Oba</option>
-                    </select>
-                </div>
-
-                <!-- Narzędzia -->
-                <div class="control-section">
-                    <h4>Narzędzia</h4>
-                    <div class="tool-buttons">
-                        <button class="btn btn--secondary btn--sm" id="resetView">Reset widoku</button>
-                        <button class="btn btn--secondary btn--sm" id="fullscreen">Pełny ekran</button>
-                        <button class="btn btn--secondary btn--sm" id="exportView">Eksport PNG</button>
-                    </div>
-                </div>
-
-                <!-- Informacje o pogodzie -->
-                <div class="control-section">
-                    <h4>Informacje</h4>
-                    <div class="weather-info">
-                        <div class="info-item">
-                            <span class="info-label">Prędkość wiatru:</span>
-                            <span id="windSpeed">--</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Kierunek:</span>
-                            <span id="windDirection">--</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Pozycja:</span>
-                            <span id="mousePosition">--</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Kontener mapy -->
-        <div class="map-container">
-            <div id="map"></div>
-            <canvas id="windCanvas"></canvas>
-            
-            <!-- Legenda -->
-            <div class="map-legend">
-                <h4>Prędkość wiatru (m/s)</h4>
-                <div class="legend-scale">
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #0000ff;"></div>
-                        <span>0-2</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #00ff00;"></div>
-                        <span>2-5</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #ffff00;"></div>
-                        <span>5-8</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background: #ff0000;"></div>
-                        <span>8+</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Loading indicator -->
-            <div class="loading-indicator hidden" id="loadingIndicator">
-                <div class="loading-spinner"></div>
-                <span>Ładowanie danych wiatru...</span>
-            </div>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h3>Loading GIS Microclimate Platform</h3>
+            <p>Please wait while we initialize the system...</p>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="app.js"></script>
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Data Tooltip -->
+    <div id="data-tooltip" class="data-tooltip"></div>
+
+    <!-- Main Application Container -->
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-wind"></i>
+                    <span class="logo-text">GIS Microclimate</span>
+                </div>
+                <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+
+            <div class="nav-menu">
+                <a href="#" class="nav-item active" data-module="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+                
+                <a href="#" class="nav-item" data-module="wind">
+                    <i class="fas fa-wind"></i>
+                    <span class="nav-text">Wind Analysis</span>
+                </a>
+                
+                <a href="#" class="nav-item" data-module="vegetation">
+                    <i class="fas fa-leaf"></i>
+                    <span class="nav-text">Vegetation</span>
+                </a>
+                
+                <a href="#" class="nav-item" data-module="thermal">
+                    <i class="fas fa-thermometer-half"></i>
+                    <span class="nav-text">Thermal Comfort</span>
+                </a>
+                
+                <a href="#" class="nav-item" data-module="scenarios">
+                    <i class="fas fa-layer-group"></i>
+                    <span class="nav-text">Scenarios</span>
+                </a>
+                
+                <a href="#" class="nav-item" data-module="export">
+                    <i class="fas fa-download"></i>
+                    <span class="nav-text">Export & Reports</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="system-info">
+                    <div class="info-item">
+                        <i class="fas fa-circle status-active"></i>
+                        <span>System Active</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="version">v2.2.0</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <nav id="breadcrumbs" class="breadcrumbs">
+                        <span class="breadcrumb-item">GIS Platform</span>
+                        <span class="breadcrumb-separator">/</span>
+                        <span class="breadcrumb-item active">Dashboard Overview</span>
+                    </nav>
+                </div>
+
+                <div class="header-right">
+                    <div class="header-actions">
+                        <button id="refresh-btn" class="btn btn-icon" title="Refresh Data">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        
+                        <button id="export-btn" class="btn btn-icon" title="Export Data">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        
+                        <div class="status-indicator">
+                            <span id="api-status" class="api-status">
+                                <i class="fas fa-circle" style="color: #ff8800;"></i> 
+                                Initializing...
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Modules -->
+            <div class="content-wrapper">
+                
+                <!-- Dashboard Module -->
+                <section id="dashboard-module" class="module active">
+                    <div class="module-header">
+                        <h1>Dashboard Overview</h1>
+                        <p>Real-time microclimate analysis and system monitoring</p>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-icon wind">
+                                <i class="fas fa-wind"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <h3>Average Wind Speed</h3>
+                                <div class="kpi-value" id="wind-kpi-value">3.8 m/s</div>
+                                <div class="kpi-change positive">
+                                    <i class="fas fa-arrow-up"></i> 5% from last update
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-icon performance">
+                                <i class="fas fa-stopwatch"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <h3>Computation Time</h3>
+                                <div class="kpi-value" id="performance-kpi-value">45.2s</div>
+                                <div class="kpi-change neutral">
+                                    <i class="fas fa-minus"></i> Stable performance
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-icon temperature">
+                                <i class="fas fa-thermometer-half"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <h3>Temperature</h3>
+                                <div class="kpi-value" id="temp-kpi-value">18.5°C</div>
+                                <div class="kpi-change neutral">
+                                    <i class="fas fa-minus"></i> Normal range
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-icon data">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <div class="kpi-content">
+                                <h3>Data Quality</h3>
+                                <div class="kpi-value" id="quality-kpi-value">8,456 pts</div>
+                                <div class="kpi-change positive">
+                                    <i class="fas fa-check"></i> High resolution
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Panels -->
+                    <div class="dashboard-grid">
+                        <!-- System Status Panel -->
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-server"></i> System Status</h3>
+                                <div class="panel-actions">
+                                    <button class="btn-icon" title="Refresh">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="panel-content">
+                                <div class="status-grid">
+                                    <div class="status-item">
+                                        <div class="status-label">Wind Module</div>
+                                        <div class="status-value">
+                                            <i class="fas fa-circle status-active"></i> Active
+                                        </div>
+                                    </div>
+                                    <div class="status-item">
+                                        <div class="status-label">Data Connection</div>
+                                        <div class="status-value" id="system-status">
+                                            <i class="fas fa-circle status-warning"></i> Sample Mode
+                                        </div>
+                                    </div>
+                                    <div class="status-item">
+                                        <div class="status-label">Last Update</div>
+                                        <div class="status-value" id="last-update">--:--</div>
+                                    </div>
+                                    <div class="status-item">
+                                        <div class="status-label">Auto Refresh</div>
+                                        <div class="status-value">
+                                            <label class="toggle">
+                                                <input type="checkbox" id="auto-refresh-toggle">
+                                                <span class="toggle-slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Stats Panel -->
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-chart-line"></i> Quick Statistics</h3>
+                            </div>
+                            <div class="panel-content">
+                                <div class="stats-grid">
+                                    <div class="stat-item">
+                                        <div class="stat-label">Grid Resolution</div>
+                                        <div class="stat-value" id="grid-size">850×680</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-label">Buildings Analyzed</div>
+                                        <div class="stat-value" id="building-count">2,556</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-label">Flow Obstacles</div>
+                                        <div class="stat-value" id="obstacle-count">1,250</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-label">Computation Time</div>
+                                        <div class="stat-value" id="computation-time">45.2s</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Activity Feed Panel -->
+                        <div class="panel activity-panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-history"></i> Recent Activity</h3>
+                            </div>
+                            <div class="panel-content">
+                                <div id="activity-list" class="activity-list">
+                                    <!-- Activity items will be populated by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Wind Analysis Module -->
+                <section id="wind-module" class="module">
+                    <div class="module-header">
+                        <h1>Wind Flow Analysis</h1>
+                        <p>Professional Lattice Boltzmann Method (LBM) wind simulation and visualization</p>
+                    </div>
+
+                    <!-- Visualization Controls -->
+                    <div class="controls-panel">
+                        <div class="control-group">
+                            <label for="viz-mode">Visualization Mode:</label>
+                            <select id="viz-mode" class="form-control">
+                                <option value="magnitude">Magnitude Heat Map</option>
+                                <option value="vectors">Vector Field</option>
+                                <option value="streamlines">Streamlines</option>
+                            </select>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="opacity-slider">Opacity: <span class="range-value">80%</span></label>
+                            <input type="range" id="opacity-slider" class="range-slider" 
+                                   min="10" max="100" value="80" step="5">
+                        </div>
+
+                        <div class="control-group">
+                            <button class="btn btn-primary" onclick="window.gisplatform?.renderWindVisualization()">
+                                <i class="fas fa-play"></i> Refresh Visualization
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Visualization Canvas -->
+                    <div class="visualization-container">
+                        <canvas id="wind-canvas" class="wind-canvas"></canvas>
+                        <div class="canvas-overlay">
+                            <div class="canvas-legend">
+                                <h4>Wind Speed (m/s)</h4>
+                                <div class="legend-gradient"></div>
+                                <div class="legend-labels">
+                                    <span>0.2</span>
+                                    <span>4.0</span>
+                                    <span>8.5</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Panels -->
+                    <div class="data-panels-grid">
+                        <!-- Flow Statistics Panel -->
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-chart-area"></i> Flow Statistics</h3>
+                            </div>
+                            <div class="panel-content">
+                                <div class="data-grid">
+                                    <div class="data-item">
+                                        <div class="data-label">Minimum Speed</div>
+                                        <div class="data-value" id="min-speed">0.20 m/s</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Maximum Speed</div>
+                                        <div class="data-value" id="max-speed">8.50 m/s</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Average Speed</div>
+                                        <div class="data-value" id="mean-speed">3.80 m/s</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Standard Deviation</div>
+                                        <div class="data-value" id="std-speed">1.90 m/s</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Median Speed</div>
+                                        <div class="data-value" id="median-speed">3.50 m/s</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">95th Percentile</div>
+                                        <div class="data-value" id="p95-speed">7.20 m/s</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Weather Conditions Panel -->
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-cloud-sun"></i> Weather Conditions</h3>
+                            </div>
+                            <div class="panel-content">
+                                <div class="data-grid">
+                                    <div class="data-item">
+                                        <div class="data-label">Current Wind</div>
+                                        <div class="data-value" id="current-wind">4.2 m/s SW</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Temperature</div>
+                                        <div class="data-value" id="current-temp">18.5°C</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Humidity</div>
+                                        <div class="data-value" id="current-humidity">65%</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Data Source</div>
+                                        <div class="data-value" id="weather-source">Sample</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Simulation Details Panel -->
+                        <div class="panel">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-cogs"></i> Simulation Details</h3>
+                            </div>
+                            <div class="panel-content">
+                                <div class="data-grid">
+                                    <div class="data-item">
+                                        <div class="data-label">Grid Resolution</div>
+                                        <div class="data-value" id="grid-size">850×680</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Pixel Resolution</div>
+                                        <div class="data-value" id="pixel-resolution">2.5 m</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Computation Time</div>
+                                        <div class="data-value" id="computation-time">45.2s</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Platform Version</div>
+                                        <div class="data-value" id="platform-version">2.2.0</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Last Update</div>
+                                        <div class="data-value" id="simulation-timestamp">--</div>
+                                    </div>
+                                    <div class="data-item">
+                                        <div class="data-label">Data Source</div>
+                                        <div class="data-value" id="data-source">Sample Data</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Vegetation Analysis Module -->
+                <section id="vegetation-module" class="module">
+                    <div class="module-header">
+                        <h1>Vegetation Analysis</h1>
+                        <p>Comprehensive vegetation mapping and microclimate impact assessment</p>
+                    </div>
+                    <div id="vegetation-content" class="module-content">
+                        <!-- Content will be populated by JavaScript -->
+                    </div>
+                </section>
+
+                <!-- Thermal Comfort Module -->
+                <section id="thermal-module" class="module">
+                    <div class="module-header">
+                        <h1>Thermal Comfort Assessment</h1>
+                        <p>Advanced thermal comfort analysis using meteorological and environmental data</p>
+                    </div>
+                    <div id="thermal-content" class="module-content">
+                        <!-- Content will be populated by JavaScript -->
+                    </div>
+                </section>
+
+                <!-- Scenarios Module -->
+                <section id="scenarios-module" class="module">
+                    <div class="module-header">
+                        <h1>Scenario Management</h1>
+                        <p>Create, manage, and compare different urban planning scenarios</p>
+                    </div>
+                    <div id="scenarios-content" class="module-content">
+                        <!-- Content will be populated by JavaScript -->
+                    </div>
+                </section>
+
+                <!-- Export & Reports Module -->
+                <section id="export-module" class="module">
+                    <div class="module-header">
+                        <h1>Export & Reports</h1>
+                        <p>Generate professional reports and export analysis results</p>
+                    </div>
+                    <div id="export-content" class="module-content">
+                        <div class="export-options">
+                            <div class="export-card">
+                                <div class="export-icon">
+                                    <i class="fas fa-file-pdf"></i>
+                                </div>
+                                <h3>PDF Report</h3>
+                                <p>Generate comprehensive analysis report in PDF format</p>
+                                <button class="btn btn-primary" onclick="window.gisplatform?.showExportDialog()">
+                                    <i class="fas fa-download"></i> Export PDF
+                                </button>
+                            </div>
+
+                            <div class="export-card">
+                                <div class="export-icon">
+                                    <i class="fas fa-file-csv"></i>
+                                </div>
+                                <h3>Data Export</h3>
+                                <p>Export raw simulation data in CSV format</p>
+                                <button class="btn btn-primary" onclick="window.gisplatform?.showExportDialog()">
+                                    <i class="fas fa-download"></i> Export CSV
+                                </button>
+                            </div>
+
+                            <div class="export-card">
+                                <div class="export-icon">
+                                    <i class="fas fa-image"></i>
+                                </div>
+                                <h3>Visualization</h3>
+                                <p>Export high-resolution visualization images</p>
+                                <button class="btn btn-primary" onclick="window.gisplatform?.showExportDialog()">
+                                    <i class="fas fa-download"></i> Export Image
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="./app.js"></script>
+    
+    <!-- Service Worker Registration (optional) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('./sw.js').then(function(registration) {
+                    console.log('SW registered: ', registration);
+                }, function(registrationError) {
+                    console.log('SW registration failed: ', registrationError);
+                });
+            });
+        }
+    </script>
 </body>
 </html>
