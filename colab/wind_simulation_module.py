@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-wind_simulation_enhanced.py
+run_wind_simulation.py
 ────────────────────────────────────────────────────────────────────────────
 Enhanced Lattice-Boltzmann wind-flow solver (D2Q9) z optymalizacjami wydajności
 Version: 2.3.0 - Enhanced performance and additional features
@@ -14,7 +14,7 @@ Improvements:
 
 API:
 -----
-run_wind_simulation_enhanced(obstacle_mask, grid_info, weather_data, sim_params) → dict
+run_run_wind_simulation(obstacle_mask, grid_info, weather_data, sim_params) → dict
 """
 
 import numpy as np
@@ -293,7 +293,7 @@ def _generate_particle_paths(ux, uy, nx, ny, num_particles=1000, max_steps=200,
 # ENHANCED PUBLIC API
 # ──────────────────────────────────────────────────────────────────────────
 
-def run_wind_simulation_enhanced(obstacle_mask: np.ndarray, 
+def run_run_wind_simulation(obstacle_mask: np.ndarray, 
                                 grid_info: Dict, 
                                 weather_data: Dict, 
                                 sim_params: Dict) -> Dict:
@@ -568,7 +568,7 @@ if __name__ == "__main__":
     }
     
     # Run test
-    results = run_wind_simulation_enhanced(
+    results = run_run_wind_simulation(
         test_mask, test_grid_info, test_weather, test_params
     )
     
