@@ -1,1465 +1,1209 @@
-/**
- * Professional GIS Microclimate Analysis Platform
- * Integrates with Google Colab via GitHub API
- * Scalable, modular architecture for engineering applications
- */
+// Professional GIS Microclimate Platform - Complete Web Application
+// Version: 2.2.0 - Fixed to NOT auto-connect on page load
+// Complete implementation with manual connection option
 
-// Application Configuration
-const AppConfig = {
-  api: {
-    github: {
-      baseUrl: 'https://api.github.com/repos',
-      defaultRepo: 'username/gis-microclimate-platform',
-      endpoints: {
-        wind: 'contents/api/data/wind_simulation/current.json',
-        vegetation: 'contents/api/data/vegetation_analysis/current.json',
-        thermal: 'contents/api/data/thermal_comfort/current.json',
-        metadata: 'contents/api/data/system/metadata.json'
+class GISMicroclimatePlatform {
+  constructor() {
+    this.config = {
+      apiConfig: {
+        githubBaseUrl: "https://api.github.com/repos",
+        defaultRepo: "dawidsajewski12-creator/mapy-analityczne", // Update this to your repo
+        endpoints: {
+          windSimulation: "api/data/wind_simulation/current.json",
+          systemMetadata: "api/data/system/metadata.json"
+        },
+        refreshInterval: 30000,
+        timeout: 5000
       },
-      refreshInterval: 30000,
-      timeout: 5000 // Reduced timeout for faster fallback
-    }
-  },
-  visualization: {
-    colorMaps: {
-      wind: ['#1FB8CD', '#FFC185', '#B4413C', '#ECEBD5', '#5D878F'],
-      temperature: ['#0066ff', '#00ccff', '#00ff00', '#ffff00', '#ff8800', '#ff0000'],
-      comfort: ['#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444']
-    },
-    canvas: {
-      defaultWidth: 800,
-      defaultHeight: 600,
-      vectorDensity: 10,
-      minVectorLength: 2
-    }
-  },
-  system: {
-    autoRefresh: true,
-    debugMode: false,
-    maxRetries: 2, // Reduced retries for faster fallback
-    fallbackMode: true // Always allow fallback to sample data
-  }
-};
-
-// Application State Management
-class AppState {
-  constructor() {
-    this.currentView = 'dashboard';
-    this.isOnline = false;
-    this.isLoading = false;
-    this.lastUpdate = null;
-    this.simulationData = null;
-    this.systemMetrics = {
-      windSpeed: 4.2,
-      windDirection: 225,
-      computationTime: 45.2,
-      obstacleCount: 1250,
-      accuracy: 96.8
-    };
-    this.modules = {
-      wind: { status: 'active', progress: 100 },
-      vegetation: { status: 'preparing', progress: 0 },
-      thermal: { status: 'preparing', progress: 0 }
-    };
-    this.exportHistory = [];
-  }
-
-  updateMetric(key, value) {
-    if (this.systemMetrics.hasOwnProperty(key)) {
-      this.systemMetrics[key] = value;
-      this.notifyObservers('metricsUpdated', { key, value });
-    }
-  }
-
-  updateModuleStatus(module, status, progress = null) {
-    if (this.modules[module]) {
-      this.modules[module].status = status;
-      if (progress !== null) {
-        this.modules[module].progress = progress;
-      }
-      this.notifyObservers('moduleStatusUpdated', { module, status, progress });
-    }
-  }
-
-  setSimulationData(data) {
-    this.simulationData = data;
-    this.lastUpdate = new Date();
-    this.notifyObservers('simulationDataUpdated', data);
-  }
-
-  // Observer pattern for reactive updates
-  notifyObservers(event, data) {
-    document.dispatchEvent(new CustomEvent(`appState:${event}`, { detail: data }));
-  }
-}
-
-// GitHub API Integration with improved error handling
-class GitHubAPIService {
-  constructor(config) {
-    this.config = config;
-    this.isConnected = false;
-    this.retryCount = 0;
-  }
-
-  async fetchData(endpoint, options = {}) {
-    const url = `${this.config.baseUrl}/${this.config.defaultRepo}/${endpoint}`;
-    
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
-
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'GIS-Microclimate-Platform',
-          'Cache-Control': 'no-cache',
-          ...options.headers
-        }
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      
-      // GitHub returns base64 encoded content for file contents
-      if (data.content && data.encoding === 'base64') {
-        const decodedContent = atob(data.content.replace(/\s/g, ''));
-        const parsedData = JSON.parse(decodedContent);
-        this.isConnected = true;
-        this.retryCount = 0;
-        return parsedData;
-      }
-
-      this.isConnected = true;
-      this.retryCount = 0;
-      return data;
-
-    } catch (error) {
-      this.isConnected = false;
-      console.warn(`GitHub API fetch failed for ${endpoint}:`, error.message);
-      
-      // Don't retry on abort (timeout) errors
-      if (error.name === 'AbortError') {
-        throw new Error('GitHub API timeout - using fallback data');
-      }
-      
-      if (this.retryCount < AppConfig.system.maxRetries) {
-        this.retryCount++;
-        console.log(`Retrying GitHub API call (${this.retryCount}/${AppConfig.system.maxRetries})...`);
-        await this.delay(500 * this.retryCount);
-        return this.fetchData(endpoint, options);
-      }
-      
-      throw error;
-    }
-  }
-
-  async fetchWindData() {
-    return this.fetchData(this.config.endpoints.wind);
-  }
-
-  async fetchSystemMetadata() {
-    return this.fetchData(this.config.endpoints.metadata);
-  }
-
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-}
-
-// Wind Visualization Engine
-class WindVisualizationEngine {
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.data = null;
-    this.mode = 'magnitude';
-    this.layers = {
-      magnitude: true,
-      vectors: true,
-      obstacles: false
-    };
-    this.opacity = {
-      magnitude: 0.8,
-      vectors: 0.9,
-      obstacles: 1.0
-    };
-  }
-
-  setData(data) {
-    this.data = data;
-    this.updateCanvasSize();
-  }
-
-  updateCanvasSize() {
-    if (!this.data || !this.canvas.parentElement) return;
-
-    const container = this.canvas.parentElement;
-    const rect = container.getBoundingClientRect();
-    
-    this.canvas.width = Math.max(400, rect.width - 40);
-    this.canvas.height = Math.max(300, rect.height - 40);
-  }
-
-  setVisualizationMode(mode) {
-    this.mode = mode;
-    this.render();
-  }
-
-  setLayerVisibility(layer, visible) {
-    this.layers[layer] = visible;
-    this.render();
-  }
-
-  setLayerOpacity(layer, opacity) {
-    this.opacity[layer] = opacity / 100;
-    this.render();
-  }
-
-  render() {
-    if (!this.data || !this.canvas) return;
-
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    try {
-      // Render based on current mode
-      switch (this.mode) {
-        case 'magnitude':
-          this.renderMagnitudeHeatmap();
-          break;
-        case 'vectors':
-          this.renderVectorField();
-          break;
-        case 'streamlines':
-          this.renderStreamlines();
-          break;
-        case 'pressure':
-          this.renderPressureField();
-          break;
-      }
-
-      // Overlay additional layers
-      if (this.layers.obstacles) {
-        this.renderObstacles();
-      }
-
-    } catch (error) {
-      console.error('Visualization render error:', error);
-      this.renderErrorState();
-    }
-  }
-
-  renderMagnitudeHeatmap() {
-    const { vectors = [], magnitudeGrid, gridWidth, gridHeight } = this.data;
-    
-    if (magnitudeGrid && gridWidth && gridHeight) {
-      this.renderGridHeatmap(magnitudeGrid, gridWidth, gridHeight);
-    } else if (vectors.length > 0) {
-      this.renderVectorHeatmap(vectors);
-    }
-  }
-
-  renderGridHeatmap(magnitudeGrid, gridWidth, gridHeight) {
-    const cellWidth = this.canvas.width / gridWidth;
-    const cellHeight = this.canvas.height / gridHeight;
-    
-    const minMag = this.data.minMagnitude || 0;
-    const maxMag = this.data.maxMagnitude || 10;
-
-    this.ctx.globalAlpha = this.layers.magnitude ? this.opacity.magnitude : 0;
-
-    for (let y = 0; y < gridHeight && y < magnitudeGrid.length; y++) {
-      const row = magnitudeGrid[y];
-      if (!Array.isArray(row)) continue;
-
-      for (let x = 0; x < gridWidth && x < row.length; x++) {
-        const magnitude = row[x];
-        const normalized = (magnitude - minMag) / (maxMag - minMag);
-        const color = this.getWindColor(normalized);
-        
-        this.ctx.fillStyle = color;
-        this.ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);
-      }
-    }
-
-    this.ctx.globalAlpha = 1.0;
-  }
-
-  renderVectorHeatmap(vectors) {
-    const cellSize = Math.min(
-      this.canvas.width / Math.sqrt(vectors.length),
-      this.canvas.height / Math.sqrt(vectors.length)
-    );
-
-    this.ctx.globalAlpha = this.layers.magnitude ? this.opacity.magnitude : 0;
-
-    vectors.forEach(vector => {
-      const x = (vector.x / (this.data.gridWidth || 100)) * this.canvas.width;
-      const y = (vector.y / (this.data.gridHeight || 100)) * this.canvas.height;
-      const magnitude = vector.magnitude || Math.sqrt(vector.vx * vector.vx + vector.vy * vector.vy);
-      
-      const normalized = magnitude / (this.data.maxMagnitude || 10);
-      const color = this.getWindColor(normalized);
-      
-      this.ctx.fillStyle = color;
-      this.ctx.fillRect(x - cellSize/2, y - cellSize/2, cellSize, cellSize);
-    });
-
-    this.ctx.globalAlpha = 1.0;
-  }
-
-  renderVectorField() {
-    if (!this.layers.vectors || !this.data.vectors) return;
-
-    this.ctx.globalAlpha = this.opacity.vectors;
-    this.ctx.strokeStyle = '#ffffff';
-    this.ctx.lineWidth = 1;
-
-    const stride = AppConfig.visualization.canvas.vectorDensity;
-    const minLength = AppConfig.visualization.canvas.minVectorLength;
-
-    this.data.vectors.forEach((vector, index) => {
-      if (index % stride !== 0) return;
-
-      const x = (vector.x / (this.data.gridWidth || 100)) * this.canvas.width;
-      const y = (vector.y / (this.data.gridHeight || 100)) * this.canvas.height;
-      
-      const magnitude = vector.magnitude || Math.sqrt(vector.vx * vector.vx + vector.vy * vector.vy);
-      
-      if (magnitude < 0.1) return;
-
-      const scale = Math.min(20, Math.max(minLength, magnitude * 3));
-      const angle = Math.atan2(vector.vy, vector.vx);
-      
-      const endX = x + Math.cos(angle) * scale;
-      const endY = y + Math.sin(angle) * scale;
-
-      // Draw arrow
-      this.ctx.beginPath();
-      this.ctx.moveTo(x, y);
-      this.ctx.lineTo(endX, endY);
-      this.ctx.stroke();
-
-      // Draw arrowhead
-      const headLength = Math.min(8, scale * 0.3);
-      const headAngle = Math.PI / 6;
-
-      this.ctx.beginPath();
-      this.ctx.moveTo(endX, endY);
-      this.ctx.lineTo(
-        endX - headLength * Math.cos(angle - headAngle),
-        endY - headLength * Math.sin(angle - headAngle)
-      );
-      this.ctx.moveTo(endX, endY);
-      this.ctx.lineTo(
-        endX - headLength * Math.cos(angle + headAngle),
-        endY - headLength * Math.sin(angle + headAngle)
-      );
-      this.ctx.stroke();
-    });
-
-    this.ctx.globalAlpha = 1.0;
-  }
-
-  renderStreamlines() {
-    // Simplified streamline rendering
-    if (!this.data.vectors) return;
-
-    this.ctx.globalAlpha = this.opacity.vectors;
-    this.ctx.strokeStyle = '#0066cc';
-    this.ctx.lineWidth = 2;
-
-    // Create streamlines from seed points
-    const seedPoints = this.generateSeedPoints(10);
-    
-    seedPoints.forEach(seed => {
-      this.traceStreamline(seed.x, seed.y);
-    });
-
-    this.ctx.globalAlpha = 1.0;
-  }
-
-  generateSeedPoints(count) {
-    const points = [];
-    for (let i = 0; i < count; i++) {
-      points.push({
-        x: Math.random() * this.canvas.width,
-        y: Math.random() * this.canvas.height
-      });
-    }
-    return points;
-  }
-
-  traceStreamline(startX, startY) {
-    let x = startX;
-    let y = startY;
-    const maxSteps = 100;
-    const stepSize = 5;
-
-    this.ctx.beginPath();
-    this.ctx.moveTo(x, y);
-
-    for (let step = 0; step < maxSteps; step++) {
-      const vector = this.interpolateVector(x, y);
-      if (!vector || vector.magnitude < 0.1) break;
-
-      const dx = vector.vx * stepSize;
-      const dy = vector.vy * stepSize;
-
-      x += dx;
-      y += dy;
-
-      if (x < 0 || x > this.canvas.width || y < 0 || y > this.canvas.height) break;
-
-      this.ctx.lineTo(x, y);
-    }
-
-    this.ctx.stroke();
-  }
-
-  interpolateVector(x, y) {
-    if (!this.data.vectors) return null;
-
-    const gridX = (x / this.canvas.width) * (this.data.gridWidth || 100);
-    const gridY = (y / this.canvas.height) * (this.data.gridHeight || 100);
-
-    // Find nearest vectors for interpolation
-    const nearestVector = this.data.vectors.reduce((closest, vector) => {
-      const dist = Math.sqrt((vector.x - gridX) ** 2 + (vector.y - gridY) ** 2);
-      return (!closest || dist < closest.distance) ? { ...vector, distance: dist } : closest;
-    }, null);
-
-    return nearestVector;
-  }
-
-  renderPressureField() {
-    // Simplified pressure visualization
-    this.renderMagnitudeHeatmap();
-    
-    // Add pressure contour lines
-    this.ctx.globalAlpha = 0.5;
-    this.ctx.strokeStyle = '#333333';
-    this.ctx.lineWidth = 1;
-
-    // Draw contour lines at regular intervals
-    const contourLevels = 5;
-    for (let level = 1; level <= contourLevels; level++) {
-      this.drawPressureContour(level / contourLevels);
-    }
-
-    this.ctx.globalAlpha = 1.0;
-  }
-
-  drawPressureContour(level) {
-    // Simplified contour drawing
-    const threshold = level * (this.data.maxMagnitude || 10);
-    const step = 20;
-
-    for (let y = step; y < this.canvas.height - step; y += step) {
-      for (let x = step; x < this.canvas.width - step; x += step) {
-        const vector = this.interpolateVector(x, y);
-        if (vector && Math.abs(vector.magnitude - threshold) < 0.5) {
-          this.ctx.beginPath();
-          this.ctx.arc(x, y, 2, 0, Math.PI * 2);
-          this.ctx.stroke();
+      visualization: {
+        defaultOpacity: 80,
+        defaultMode: 'magnitude',
+        colorSchemes: {
+          magnitude: 'viridis',
+          temperature: 'plasma'
         }
       }
-    }
-  }
-
-  renderObstacles() {
-    // Render obstacles from data
-    this.ctx.globalAlpha = this.opacity.obstacles;
-    this.ctx.fillStyle = 'rgba(60, 60, 60, 0.8)';
-    this.ctx.strokeStyle = '#333333';
-    this.ctx.lineWidth = 1;
-
-    // Draw simple rectangular obstacles
-    const obstacleSize = 20;
-    const obstacleCount = Math.min(50, Math.floor(Math.random() * 30) + 20);
-
-    for (let i = 0; i < obstacleCount; i++) {
-      const x = Math.random() * (this.canvas.width - obstacleSize);
-      const y = Math.random() * (this.canvas.height - obstacleSize);
-      
-      this.ctx.fillRect(x, y, obstacleSize, obstacleSize);
-      this.ctx.strokeRect(x, y, obstacleSize, obstacleSize);
-    }
-
-    this.ctx.globalAlpha = 1.0;
-  }
-
-  renderErrorState() {
-    this.ctx.fillStyle = '#f3f4f6';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    this.ctx.fillStyle = '#6b7280';
-    this.ctx.font = '16px Roboto, sans-serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText(
-      'Błąd renderowania wizualizacji',
-      this.canvas.width / 2,
-      this.canvas.height / 2
-    );
-  }
-
-  getWindColor(normalized) {
-    const colors = AppConfig.visualization.colorMaps.wind;
-    const index = Math.floor(normalized * (colors.length - 1));
-    const t = (normalized * (colors.length - 1)) - index;
-    
-    const color1 = this.hexToRgb(colors[Math.min(index, colors.length - 1)]);
-    const color2 = this.hexToRgb(colors[Math.min(index + 1, colors.length - 1)]);
-    
-    const r = Math.round(color1.r + (color2.r - color1.r) * t);
-    const g = Math.round(color1.g + (color2.g - color1.g) * t);
-    const b = Math.round(color1.b + (color2.b - color1.b) * t);
-    
-    return `rgb(${r}, ${g}, ${b})`;
-  }
-
-  hexToRgb(hex) {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : { r: 0, g: 0, b: 0 };
-  }
-}
-
-// Notification System
-class NotificationSystem {
-  constructor() {
-    this.container = document.getElementById('toast-container') || this.createContainer();
-    this.notifications = [];
-  }
-
-  createContainer() {
-    const container = document.createElement('div');
-    container.id = 'toast-container';
-    container.className = 'toast-container';
-    document.body.appendChild(container);
-    return container;
-  }
-
-  show(message, type = 'info', duration = 4000) {
-    const notification = this.createNotification(message, type);
-    this.notifications.push(notification);
-    this.container.appendChild(notification);
-
-    // Trigger animation
-    setTimeout(() => notification.classList.add('show'), 100);
-
-    // Auto remove
-    setTimeout(() => this.remove(notification), duration);
-
-    return notification;
-  }
-
-  createNotification(message, type) {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    
-    const icons = {
-      success: 'fas fa-check-circle',
-      error: 'fas fa-exclamation-circle',
-      warning: 'fas fa-exclamation-triangle',
-      info: 'fas fa-info-circle'
     };
-
-    toast.innerHTML = `
-      <div class="toast-content">
-        <i class="toast-icon ${icons[type] || icons.info}"></i>
-        <div class="toast-message">${message}</div>
-      </div>
-    `;
-
-    return toast;
-  }
-
-  remove(notification) {
-    notification.classList.remove('show');
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-      this.notifications = this.notifications.filter(n => n !== notification);
-    }, 300);
-  }
-
-  clear() {
-    this.notifications.forEach(notification => this.remove(notification));
-  }
-}
-
-// Main Application Class with improved error handling
-class GISMicroclimateApp {
-  constructor() {
-    this.state = new AppState();
-    this.api = new GitHubAPIService(AppConfig.api.github);
-    this.notifications = new NotificationSystem();
-    this.windViz = null;
-    this.refreshTimer = null;
-    this.initPromise = null;
+    
+    this.state = {
+      currentModule: 'dashboard',
+      isLoading: false,
+      apiConnected: false,
+      lastUpdate: null,
+      windData: null,
+      autoRefreshEnabled: false, // Changed: disabled by default
+      refreshTimer: null,
+      vizMode: 'magnitude',
+      opacity: 80
+    };
+    
+    this.canvas = null;
+    this.ctx = null;
     
     this.init();
   }
-
+  
+  // Initialize application - NO AUTO API LOADING
   async init() {
-    console.log('Initializing GIS Microclimate Platform...');
-    
-    // Ensure we don't initialize multiple times
-    if (this.initPromise) return this.initPromise;
-    
-    this.initPromise = this.performInit();
-    return this.initPromise;
-  }
-
-  async performInit() {
-    try {
-      // Always hide loading first to prevent stuck state
-      this.hideLoading();
-      
-      // Setup basic DOM structure first
-      await this.setupDOM();
-      await this.setupEventListeners();
-      await this.initializeVisualization();
-      
-      // Load data with proper error handling
-      await this.safeLoadInitialData();
-      
-      this.startAutoRefresh();
-      this.updateConnectionStatus();
-      
-      console.log('Platform initialized successfully');
-      this.notifications.show('System uruchomiony pomyślnie', 'success');
-      
-    } catch (error) {
-      console.error('Initialization error:', error);
-      this.notifications.show('Błąd inicjalizacji - używam danych przykładowych', 'warning');
-      
-      // Ensure fallback data is loaded even on error
-      await this.loadFallbackData();
-    } finally {
-      // Always ensure loading is hidden
-      this.hideLoading();
-    }
-  }
-
-  async safeLoadInitialData() {
-    this.showLoading('Łączenie z GitHub API...', 0);
+    console.log('🚀 Initializing GIS Microclimate Platform (No Auto-Connect Mode)');
     
     try {
-      // Set a hard timeout for the entire operation
-      const loadPromise = this.loadInitialData();
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout')), 8000);
-      });
+      this.setupEventListeners();
+      this.setupCanvas();
+      this.loadSampleData(); // Load sample data instead of API data
+      this.updateUI();
       
-      await Promise.race([loadPromise, timeoutPromise]);
+      // Show manual connection option instead of auto-connecting
+      this.showConnectionOption();
       
+      console.log('✅ Platform initialized with sample data - ready for manual connection');
     } catch (error) {
-      console.warn('Initial data loading failed, using fallback:', error.message);
-      await this.loadFallbackData();
-    } finally {
-      this.hideLoading();
+      console.error('❌ Initialization failed:', error);
+      this.showToast('Platform initialization failed', 'error');
     }
   }
-
-  async loadInitialData() {
-    try {
-      // Update progress
-      this.updateLoadingProgress(25);
-      
-      // Try to load real data from GitHub API
-      const windData = await this.api.fetchWindData();
-      
-      this.updateLoadingProgress(75);
-      
-      this.state.setSimulationData(windData);
-      this.state.isOnline = true;
-      this.notifications.show('Dane załadowane z GitHub API', 'success');
-      
-      this.updateLoadingProgress(100);
-      
-    } catch (error) {
-      this.state.isOnline = false;
-      throw error; // Re-throw to trigger fallback
+  
+  // Show connection option instead of auto-connecting
+  showConnectionOption() {
+    const statusElement = document.getElementById('api-status');
+    if (statusElement) {
+      statusElement.innerHTML = `
+        <i class="fas fa-circle" style="color: #ff8800;"></i> 
+        <button onclick="window.gisplatform.connectToAPI()" 
+                style="background: none; border: none; color: #0066cc; text-decoration: underline; cursor: pointer; font-weight: 500;">
+          Connect to Live Data
+        </button>
+      `;
     }
+    
+    // Update connection status in other locations
+    this.updateConnectionStatus('disconnected');
   }
-
-  async loadFallbackData() {
-    console.log('Loading fallback sample data...');
+  
+  // Manual API connection method
+  async connectToAPI() {
+    this.showLoading(true);
+    this.showToast('Connecting to live data from GitHub Pages...', 'info');
     
     try {
-      const sampleData = this.generateSampleData();
-      this.state.setSimulationData(sampleData);
-      this.state.isOnline = false;
-      
-      if (AppConfig.system.fallbackMode) {
-        this.notifications.show('Używam przykładowych danych (tryb offline)', 'info');
-      }
-    } catch (error) {
-      console.error('Even fallback data failed:', error);
-      this.notifications.show('Błąd ładowania danych', 'error');
-    }
-  }
-
-  async setupDOM() {
-    // Initialize navigation
-    this.setupNavigation();
-    
-    // Setup view management
-    this.setupViewManagement();
-    
-    // Setup controls
-    this.setupControls();
-    
-    // Update initial UI state
-    this.updateDashboard();
-  }
-
-  setupNavigation() {
-    const navItems = document.querySelectorAll('.nav-item');
-    const sidebarToggle = document.getElementById('sidebar-toggle');
-    const sidebar = document.querySelector('.sidebar');
-    
-    navItems.forEach(item => {
-      item.addEventListener('click', (e) => {
-        e.preventDefault();
-        const view = item.dataset.view;
-        this.switchView(view);
+      const success = await this.loadWindDataFromAPI();
+      if (success) {
+        this.state.apiConnected = true;
+        this.updateUI();
+        this.startAutoRefresh();
+        this.showToast('Successfully connected to live data!', 'success');
         
-        // Update active state
-        navItems.forEach(nav => nav.classList.remove('active'));
-        item.classList.add('active');
-      });
-    });
-
-    if (sidebarToggle && sidebar) {
-      sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('collapsed');
-      });
-    }
-  }
-
-  setupViewManagement() {
-    // Initialize with dashboard view
-    this.switchView('dashboard');
-  }
-
-  setupControls() {
-    // Refresh data button
-    const refreshBtn = document.getElementById('refresh-data');
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => this.refreshData());
-    }
-
-    // Module refresh button
-    const refreshModulesBtn = document.getElementById('refresh-modules');
-    if (refreshModulesBtn) {
-      refreshModulesBtn.addEventListener('click', () => this.refreshModuleStatus());
-    }
-
-    // Quick action buttons
-    const actionButtons = document.querySelectorAll('.action-btn');
-    actionButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const action = btn.dataset.action;
-        this.handleQuickAction(action);
-      });
-    });
-
-    // Wind simulation controls
-    const runSimBtn = document.getElementById('run-wind-simulation');
-    if (runSimBtn) {
-      runSimBtn.addEventListener('click', () => this.runWindSimulation());
-    }
-
-    // Visualization mode selector
-    const vizModeSelect = document.getElementById('visualization-mode');
-    if (vizModeSelect) {
-      vizModeSelect.addEventListener('change', (e) => {
-        if (this.windViz) {
-          this.windViz.setVisualizationMode(e.target.value);
-        }
-      });
-    }
-
-    // Layer controls
-    this.setupLayerControls();
-
-    // Export controls
-    this.setupExportControls();
-  }
-
-  setupLayerControls() {
-    const layerCheckboxes = document.querySelectorAll('[id^="show-"]');
-    const opacitySliders = document.querySelectorAll('.layer-opacity');
-
-    layerCheckboxes.forEach(checkbox => {
-      checkbox.addEventListener('change', (e) => {
-        const layer = e.target.id.replace('show-', '');
-        if (this.windViz) {
-          this.windViz.setLayerVisibility(layer, e.target.checked);
-        }
-      });
-    });
-
-    opacitySliders.forEach(slider => {
-      slider.addEventListener('input', (e) => {
-        const layerItem = e.target.closest('.layer-item');
-        const checkbox = layerItem?.querySelector('input[type="checkbox"]');
-        if (checkbox && this.windViz) {
-          const layer = checkbox.id.replace('show-', '');
-          this.windViz.setLayerOpacity(layer, e.target.value);
-        }
-      });
-    });
-  }
-
-  setupExportControls() {
-    const exportBtn = document.getElementById('generate-export');
-    if (exportBtn) {
-      exportBtn.addEventListener('click', () => this.generateExport());
-    }
-
-    const exportStatsBtn = document.getElementById('export-stats');
-    if (exportStatsBtn) {
-      exportStatsBtn.addEventListener('click', () => this.exportStatistics());
-    }
-  }
-
-  async setupEventListeners() {
-    // State change listeners
-    document.addEventListener('appState:simulationDataUpdated', (e) => {
-      this.onSimulationDataUpdated(e.detail);
-    });
-
-    document.addEventListener('appState:moduleStatusUpdated', (e) => {
-      this.onModuleStatusUpdated(e.detail);
-    });
-
-    // Window resize listener
-    window.addEventListener('resize', () => {
-      if (this.windViz) {
-        setTimeout(() => {
-          this.windViz.updateCanvasSize();
-          this.windViz.render();
-        }, 100);
-      }
-    });
-
-    // Add escape key listener to dismiss loading
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.state.isLoading) {
-        this.hideLoading();
-        this.notifications.show('Ładowanie przerwane przez użytkownika', 'info');
-      }
-    });
-  }
-
-  async initializeVisualization() {
-    const windCanvas = document.getElementById('wind-canvas');
-    if (windCanvas) {
-      this.windViz = new WindVisualizationEngine(windCanvas);
-    }
-  }
-
-  generateSampleData() {
-    const gridWidth = 85;
-    const gridHeight = 68;
-    const vectors = [];
-    const magnitudeGrid = [];
-
-    // Generate sample wind field
-    for (let y = 0; y < gridHeight; y++) {
-      const row = [];
-      for (let x = 0; x < gridWidth; x++) {
-        const magnitude = 2 + Math.random() * 6;
-        const angle = Math.PI * 0.25 + Math.sin(x / 10) * 0.5 + Math.cos(y / 10) * 0.3;
+        // Update status elements
+        this.updateConnectionStatus('connected');
         
-        if (y % 5 === 0 && x % 5 === 0) {
-          vectors.push({
-            x: x,
-            y: y,
-            vx: magnitude * Math.cos(angle),
-            vy: magnitude * Math.sin(angle),
-            magnitude: magnitude
-          });
+        // If we're on wind module, re-render with new data
+        if (this.state.currentModule === 'wind') {
+          setTimeout(() => this.renderWindVisualization(), 100);
         }
-
-        row.push(magnitude);
+      } else {
+        throw new Error('Failed to load live data from API');
       }
-      magnitudeGrid.push(row);
+    } catch (error) {
+      console.error('Failed to connect to API:', error);
+      this.showToast('Failed to connect to live data. Continuing with sample data.', 'warning');
+      this.updateConnectionStatus('failed');
     }
-
-    return {
+    
+    this.showLoading(false);
+  }
+  
+  // Update connection status in UI
+  updateConnectionStatus(status) {
+    const statusElement = document.getElementById('api-status');
+    if (!statusElement) return;
+    
+    switch (status) {
+      case 'connected':
+        statusElement.innerHTML = '<i class="fas fa-circle status-active"></i> Live Data Connected';
+        break;
+      case 'disconnected':
+        // Already handled in showConnectionOption()
+        break;
+      case 'failed':
+        statusElement.innerHTML = `
+          <i class="fas fa-circle" style="color: #ff4444;"></i> 
+          <button onclick="window.gisplatform.connectToAPI()" 
+                  style="background: none; border: none; color: #0066cc; text-decoration: underline; cursor: pointer;">
+            Retry Connection
+          </button>
+        `;
+        break;
+    }
+  }
+  
+  // Load wind data from GitHub Pages API
+  async loadWindDataFromAPI() {
+    const repoOwner = this.getRepoOwner();
+    const repoName = this.getRepoName();
+    const url = `https://${repoOwner}.github.io/${repoName}/${this.config.apiConfig.endpoints.windSimulation}`;
+    
+    try {
+      console.log(`🌐 Loading live data from: ${url}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.config.apiConfig.timeout);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Validate data structure
+        if (this.validateWindData(data)) {
+          this.state.windData = data;
+          this.state.lastUpdate = new Date();
+          
+          console.log('✅ Live wind data loaded successfully:', data.metadata);
+          return true;
+        } else {
+          console.warn('⚠️  Invalid data structure received from API');
+          return false;
+        }
+      } else {
+        console.warn(`❌ API returned status ${response.status}: ${response.statusText}`);
+        return false;
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.error('❌ API request timeout');
+      } else {
+        console.error('❌ API loading error:', error.message);
+      }
+      return false;
+    }
+  }
+  
+  // Validate wind data structure
+  validateWindData(data) {
+    const requiredFields = [
+      'metadata',
+      'grid_properties', 
+      'flow_statistics',
+      'weather_conditions',
+      'vector_field'
+    ];
+    
+    return requiredFields.every(field => field in data);
+  }
+  
+  // Get repository owner from config
+  getRepoOwner() {
+    return this.config.apiConfig.defaultRepo.split('/')[0];
+  }
+  
+  // Get repository name from config
+  getRepoName() {
+    return this.config.apiConfig.defaultRepo.split('/')[1];
+  }
+  
+  // Load sample data as default (no API calls required)
+  loadSampleData() {
+    this.state.windData = {
       metadata: {
         timestamp: new Date().toISOString(),
-        module: 'wind_simulation',
-        version: '1.0.0',
-        computation_time: 45.2
+        module: "wind_simulation",
+        version: "2.2.0",
+        computation_time: 45.2,
+        platform: "sample_data_mode"
+      },
+      configuration: {
+        location: {
+          latitude: 54.16,
+          longitude: 19.40
+        }
       },
       grid_properties: {
-        width: gridWidth * 10,
-        height: gridHeight * 10,
+        width: 850,
+        height: 680,
         bounds: [[54.15, 19.35], [54.17, 19.45]],
-        obstacle_count: 1250
+        obstacle_count: 1250,
+        buildings_count: 2556,
+        pixel_size_m: 2.5
       },
       flow_statistics: {
         min_magnitude: 0.2,
         max_magnitude: 8.5,
         mean_magnitude: 3.8,
-        std_magnitude: 1.9
+        std_magnitude: 1.9,
+        median_magnitude: 3.5,
+        percentile_95: 7.2,
+        percentile_05: 0.8
       },
       weather_conditions: {
         wind_speed_ms: 4.2,
         wind_direction_deg: 225,
         temperature_c: 18.5,
         humidity_percent: 65,
-        source: 'sample-data'
+        source: "sample-data",
+        timestamp: new Date().toISOString()
       },
-      gridWidth: gridWidth,
-      gridHeight: gridHeight,
-      bounds: [[54.15, 19.35], [54.17, 19.45]],
-      vectors: vectors,
-      minMagnitude: 0.2,
-      maxMagnitude: 8.5,
-      magnitudeGrid: magnitudeGrid
+      vector_field: this.generateSampleVectorField()
     };
-  }
-
-  switchView(viewName) {
-    const views = document.querySelectorAll('.view');
-    const breadcrumb = document.getElementById('breadcrumb-text');
-
-    views.forEach(view => view.classList.remove('active'));
     
-    const targetView = document.getElementById(`${viewName}-view`);
-    if (targetView) {
-      targetView.classList.add('active');
-      this.state.currentView = viewName;
-      
-      // Update breadcrumb
-      const viewNames = {
-        'dashboard': 'Dashboard',
-        'wind-analysis': 'Analiza wiatru',
-        'vegetation': 'Roślinność',
-        'thermal': 'Komfort termiczny',
-        'export': 'Eksport'
-      };
-      
-      if (breadcrumb) {
-        breadcrumb.textContent = viewNames[viewName] || 'Dashboard';
-      }
-
-      // Trigger view-specific initialization
-      this.onViewChanged(viewName);
-    }
+    this.state.lastUpdate = new Date();
+    console.log('📊 Sample data loaded successfully');
   }
-
-  onViewChanged(viewName) {
-    switch (viewName) {
-      case 'wind-analysis':
-        if (this.windViz && this.state.simulationData) {
-          setTimeout(() => {
-            this.windViz.setData(this.state.simulationData);
-            this.windViz.render();
-            this.updateWindLegend();
-          }, 100);
-        }
-        break;
-    }
-  }
-
-  updateDashboard() {
-    // Update KPI values
-    const elements = {
-      'wind-speed-kpi': `${this.state.systemMetrics.windSpeed} m/s`,
-      'computation-time': `${this.state.systemMetrics.computationTime}s`,
-      'obstacles-count': this.state.systemMetrics.obstacleCount.toLocaleString(),
-      'accuracy-value': `${this.state.systemMetrics.accuracy}%`
-    };
-
-    Object.entries(elements).forEach(([id, value]) => {
-      const element = document.getElementById(id);
-      if (element) element.textContent = value;
-    });
-
-    // Update module status
-    this.updateModuleStatusDisplay();
+  
+  // Generate realistic sample vector field
+  generateSampleVectorField() {
+    const vectors = [];
+    const gridSize = 20;
+    const windDirection = Math.PI * 1.25; // 225 degrees
     
-    // Update last update time
-    this.updateLastUpdateTime();
-  }
-
-  updateModuleStatusDisplay() {
-    const moduleItems = document.querySelectorAll('.module-status-item');
-    
-    moduleItems.forEach((item, index) => {
-      const moduleNames = ['wind', 'vegetation', 'thermal'];
-      const moduleName = moduleNames[index];
-      
-      if (moduleName && this.state.modules[moduleName]) {
-        const module = this.state.modules[moduleName];
-        const statusElement = item.querySelector('.status');
-        const progressBar = item.querySelector('.progress-bar');
+    for (let x = 0; x < 850; x += gridSize) {
+      for (let y = 0; y < 680; y += gridSize) {
+        // Create realistic flow pattern with obstacles
+        const centerX = 425;
+        const centerY = 340;
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
         
-        if (statusElement) {
-          statusElement.className = `status ${module.status === 'active' ? 'success' : 'warning'}`;
-          statusElement.textContent = this.getStatusLabel(module.status);
+        // Base wind direction with perturbations
+        let angle = windDirection + Math.sin(distance * 0.01) * 0.3;
+        
+        // Create wake effects behind obstacles
+        if (distance < 100) {
+          angle += Math.PI * 0.2 * Math.sin(Math.atan2(dy, dx) * 3);
         }
         
-        if (progressBar) {
-          progressBar.style.width = `${module.progress}%`;
-        }
+        // Variable magnitude based on distance and direction
+        let magnitude = Math.max(0.5, 6.0 - distance * 0.008 + Math.random() * 0.5);
+        magnitude *= (0.8 + 0.4 * Math.sin(x * 0.02) * Math.cos(y * 0.02));
+        
+        const vx = Math.cos(angle) * magnitude;
+        const vy = Math.sin(angle) * magnitude;
+        
+        vectors.push({
+          x: x,
+          y: y,
+          vx: parseFloat(vx.toFixed(4)),
+          vy: parseFloat(vy.toFixed(4)),
+          magnitude: parseFloat(magnitude.toFixed(4))
+        });
       }
+    }
+    
+    console.log(`📈 Generated ${vectors.length} sample vectors`);
+    return vectors;
+  }
+  
+  // Setup event listeners for UI interactions
+  setupEventListeners() {
+    // Navigation menu items
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        const module = item.dataset.module;
+        if (module) {
+          this.switchModule(module);
+        }
+      });
     });
-  }
-
-  getStatusLabel(status) {
-    const labels = {
-      'active': 'Aktywny',
-      'preparing': 'Przygotowanie',
-      'error': 'Błąd',
-      'offline': 'Offline'
-    };
-    return labels[status] || status;
-  }
-
-  updateLastUpdateTime() {
-    const timeElement = document.getElementById('last-update-time');
-    if (timeElement && this.state.lastUpdate) {
-      timeElement.textContent = this.state.lastUpdate.toLocaleTimeString('pl-PL', {
-        hour: '2-digit',
-        minute: '2-digit'
+    
+    // Refresh button
+    const refreshBtn = document.getElementById('refresh-btn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        if (this.state.apiConnected) {
+          this.refreshData();
+        } else {
+          this.connectToAPI();
+        }
+      });
+    }
+    
+    // Export button
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', () => {
+        this.showExportDialog();
+      });
+    }
+    
+    // Visualization controls
+    const vizMode = document.getElementById('viz-mode');
+    if (vizMode) {
+      vizMode.addEventListener('change', (e) => {
+        this.state.vizMode = e.target.value;
+        this.updateVisualization();
+      });
+    }
+    
+    const opacitySlider = document.getElementById('opacity-slider');
+    if (opacitySlider) {
+      opacitySlider.addEventListener('input', (e) => {
+        this.state.opacity = parseInt(e.target.value);
+        this.updateOpacity();
+        
+        const rangeValue = document.querySelector('.range-value');
+        if (rangeValue) rangeValue.textContent = `${e.target.value}%`;
+      });
+    }
+    
+    // Sidebar toggle for mobile
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    if (sidebarToggle) {
+      sidebarToggle.addEventListener('click', () => {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) {
+          sidebar.classList.toggle('open');
+        }
+      });
+    }
+    
+    // Auto-refresh toggle
+    const autoRefreshToggle = document.getElementById('auto-refresh-toggle');
+    if (autoRefreshToggle) {
+      autoRefreshToggle.addEventListener('change', (e) => {
+        this.state.autoRefreshEnabled = e.target.checked;
+        if (this.state.apiConnected) {
+          if (this.state.autoRefreshEnabled) {
+            this.startAutoRefresh();
+          } else {
+            this.stopAutoRefresh();
+          }
+        }
       });
     }
   }
-
-  updateConnectionStatus() {
-    const statusElement = document.getElementById('connection-status');
-    const systemStatus = document.getElementById('system-status');
-    const statusText = document.getElementById('status-text');
-
-    if (statusElement) {
-      statusElement.className = `connection-status ${this.state.isOnline ? '' : 'disconnected'}`;
-    }
-
-    if (systemStatus) {
-      systemStatus.className = `status-led ${this.state.isOnline ? 'active' : 'error'}`;
-    }
-
-    if (statusText) {
-      statusText.textContent = this.state.isOnline ? 'System aktywny' : 'Tryb offline';
-    }
-  }
-
-  updateWindLegend() {
-    const legendElement = document.getElementById('wind-legend');
-    if (!legendElement || !this.state.simulationData) return;
-
-    const { minMagnitude = 0, maxMagnitude = 10 } = this.state.simulationData;
-    const steps = 5;
-    
-    legendElement.innerHTML = '';
-
-    for (let i = 0; i < steps; i++) {
-      const value = minMagnitude + (maxMagnitude - minMagnitude) * (i / (steps - 1));
-      const normalized = i / (steps - 1);
+  
+  // Setup canvas for wind visualizations
+  setupCanvas() {
+    this.canvas = document.getElementById('wind-canvas');
+    if (this.canvas) {
+      this.ctx = this.canvas.getContext('2d');
+      this.resizeCanvas();
       
-      const item = document.createElement('div');
-      item.className = 'legend-item';
-      
-      const colorBox = document.createElement('div');
-      colorBox.className = 'legend-color';
-      colorBox.style.backgroundColor = this.windViz.getWindColor(normalized);
-      
-      const label = document.createElement('span');
-      label.textContent = `${value.toFixed(1)} m/s`;
-      
-      item.appendChild(colorBox);
-      item.appendChild(label);
-      legendElement.appendChild(item);
-    }
-  }
-
-  async refreshData() {
-    if (this.state.isLoading) return;
-    
-    this.showLoading('Odświeżanie danych...');
-    
-    try {
-      await this.safeLoadInitialData();
-      this.updateDashboard();
-      this.updateConnectionStatus();
-      this.notifications.show('Dane odświeżone pomyślnie', 'success');
-      
-    } catch (error) {
-      console.error('Data refresh error:', error);
-      this.notifications.show('Błąd podczas odświeżania danych', 'error');
-    } finally {
-      this.hideLoading();
-    }
-  }
-
-  async refreshModuleStatus() {
-    // Simulate module status refresh
-    const modules = Object.keys(this.state.modules);
-    
-    modules.forEach(module => {
-      if (module === 'wind') {
-        this.state.updateModuleStatus(module, 'active', 100);
-      } else {
-        const progress = Math.random() * 100;
-        const status = progress > 50 ? 'preparing' : 'preparing';
-        this.state.updateModuleStatus(module, status, progress);
-      }
-    });
-
-    this.updateModuleStatusDisplay();
-    this.notifications.show('Status modułów odświeżony', 'info');
-  }
-
-  handleQuickAction(action) {
-    switch (action) {
-      case 'wind-analysis':
-        this.switchView('wind-analysis');
-        break;
-      case 'load-colab-data':
-        this.refreshData();
-        break;
-      case 'export-results':
-        this.switchView('export');
-        break;
-      default:
-        this.notifications.show(`Akcja: ${action}`, 'info');
-    }
-  }
-
-  async runWindSimulation() {
-    const button = document.getElementById('run-wind-simulation');
-    if (!button || this.state.isLoading) return;
-
-    const originalHTML = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Symulacja w toku...';
-    button.disabled = true;
-
-    this.showLoading('Uruchamianie symulacji LBM...', 0);
-
-    try {
-      // Simulate computation progress
-      for (let progress = 0; progress <= 100; progress += 10) {
-        await this.delay(200);
-        this.updateLoadingProgress(progress);
-      }
-
-      // Generate new data or refresh from API
-      await this.loadFallbackData(); // Use fallback for simulation
-      
-      if (this.windViz && this.state.simulationData) {
-        this.windViz.setData(this.state.simulationData);
-        this.windViz.render();
-      }
-
-      this.notifications.show('Symulacja zakończona pomyślnie', 'success');
-
-    } catch (error) {
-      console.error('Simulation error:', error);
-      this.notifications.show('Błąd podczas symulacji', 'error');
-    } finally {
-      this.hideLoading();
-      button.innerHTML = originalHTML;
-      button.disabled = false;
-    }
-  }
-
-  async generateExport() {
-    const formatInputs = document.querySelectorAll('input[name="export-format"]');
-    let format = 'pdf';
-    
-    formatInputs.forEach(input => {
-      if (input.checked) format = input.value;
-    });
-
-    this.showLoading('Generowanie eksportu...');
-
-    try {
-      await this.delay(2000); // Simulate export generation
-
-      switch (format) {
-        case 'pdf':
-          this.exportPDF();
-          break;
-        case 'csv':
-          this.exportCSV();
-          break;
-        case 'geojson':
-          this.exportGeoJSON();
-          break;
-      }
-
-      // Add to export history
-      this.addToExportHistory(format);
-      this.notifications.show(`Export ${format.toUpperCase()} wygenerowany`, 'success');
-
-    } catch (error) {
-      console.error('Export error:', error);
-      this.notifications.show('Błąd podczas eksportu', 'error');
-    } finally {
-      this.hideLoading();
-    }
-  }
-
-  exportCSV() {
-    if (!this.state.simulationData) {
-      this.notifications.show('Brak danych do eksportu', 'warning');
-      return;
-    }
-
-    const csvData = this.generateCSVData();
-    this.downloadFile(csvData, 'wind_analysis_data.csv', 'text/csv');
-  }
-
-  generateCSVData() {
-    const { vectors = [], flow_statistics = {}, weather_conditions = {} } = this.state.simulationData;
-    
-    let csv = 'X,Y,VelocityX,VelocityY,Magnitude\n';
-    
-    vectors.forEach(vector => {
-      csv += `${vector.x},${vector.y},${vector.vx},${vector.vy},${vector.magnitude || 0}\n`;
-    });
-
-    return csv;
-  }
-
-  exportGeoJSON() {
-    if (!this.state.simulationData) {
-      this.notifications.show('Brak danych do eksportu', 'warning');
-      return;
-    }
-
-    const geoData = {
-      type: 'FeatureCollection',
-      features: this.state.simulationData.vectors.map(vector => ({
-        type: 'Feature',
-        geometry: {
-          type: 'Point',
-          coordinates: [vector.x, vector.y]
-        },
-        properties: {
-          velocity_x: vector.vx,
-          velocity_y: vector.vy,
-          magnitude: vector.magnitude || 0
+      // Handle window resize
+      window.addEventListener('resize', () => {
+        this.resizeCanvas();
+        if (this.state.currentModule === 'wind' && this.state.windData) {
+          this.renderWindVisualization();
         }
-      }))
-    };
-
-    const dataStr = JSON.stringify(geoData, null, 2);
-    this.downloadFile(dataStr, 'wind_analysis.geojson', 'application/geo+json');
-  }
-
-  exportPDF() {
-    this.notifications.show('Export PDF będzie dostępny w przyszłej wersji', 'info');
-  }
-
-  exportStatistics() {
-    if (!this.state.simulationData) {
-      this.notifications.show('Brak statystyk do eksportu', 'warning');
-      return;
-    }
-
-    const stats = this.state.simulationData.flow_statistics || {};
-    const csv = Object.entries(stats)
-      .map(([key, value]) => `${key},${value}`)
-      .join('\n');
-
-    this.downloadFile('Parameter,Value\n' + csv, 'wind_statistics.csv', 'text/csv');
-    this.notifications.show('Statystyki wyeksportowane', 'success');
-  }
-
-  addToExportHistory(format) {
-    const historyItem = {
-      id: Date.now(),
-      format: format,
-      filename: `export_${format}_${new Date().toISOString().split('T')[0]}.${format}`,
-      timestamp: new Date(),
-      size: '2.4 MB'
-    };
-
-    this.state.exportHistory.unshift(historyItem);
-    this.updateExportHistory();
-  }
-
-  updateExportHistory() {
-    const historyList = document.getElementById('export-history-list');
-    if (!historyList) return;
-
-    historyList.innerHTML = this.state.exportHistory.map(item => `
-      <div class="history-item">
-        <div class="history-icon">
-          <i class="fas fa-file-${item.format === 'csv' ? 'csv' : item.format === 'pdf' ? 'pdf' : 'code'}"></i>
-        </div>
-        <div class="history-details">
-          <div class="history-name">${item.filename}</div>
-          <div class="history-meta">
-            ${item.timestamp.toLocaleDateString('pl-PL')} ${item.timestamp.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} • ${item.size}
-          </div>
-        </div>
-        <button class="btn btn--sm btn--outline">
-          <i class="fas fa-download"></i>
-        </button>
-      </div>
-    `).join('');
-  }
-
-  downloadFile(content, filename, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
-
-  startAutoRefresh() {
-    if (AppConfig.system.autoRefresh && this.state.isOnline) {
-      this.refreshTimer = setInterval(() => {
-        this.refreshData();
-      }, AppConfig.api.github.refreshInterval);
+      });
+      
+      // Handle canvas interactions
+      this.setupCanvasInteractions();
     }
   }
-
-  stopAutoRefresh() {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
+  
+  // Setup canvas interactions (zoom, pan, etc.)
+  setupCanvasInteractions() {
+    if (!this.canvas) return;
+    
+    let isMouseDown = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+    
+    this.canvas.addEventListener('mousedown', (e) => {
+      isMouseDown = true;
+      lastMouseX = e.offsetX;
+      lastMouseY = e.offsetY;
+      this.canvas.style.cursor = 'grabbing';
+    });
+    
+    this.canvas.addEventListener('mousemove', (e) => {
+      if (isMouseDown) {
+        // Implement panning if needed
+        // For now, just update cursor
+      } else {
+        // Show coordinates or wind data on hover
+        this.showDataAtPoint(e.offsetX, e.offsetY);
+      }
+    });
+    
+    this.canvas.addEventListener('mouseup', () => {
+      isMouseDown = false;
+      this.canvas.style.cursor = 'grab';
+    });
+    
+    this.canvas.addEventListener('mouseleave', () => {
+      isMouseDown = false;
+      this.canvas.style.cursor = 'default';
+    });
+    
+    // Mouse wheel for zoom
+    this.canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      // Implement zoom if needed
+    });
+  }
+  
+  // Show data at specific point on canvas
+  showDataAtPoint(canvasX, canvasY) {
+    if (!this.state.windData) return;
+    
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = this.state.windData.grid_properties.width / rect.width;
+    const scaleY = this.state.windData.grid_properties.height / rect.height;
+    
+    const dataX = Math.floor(canvasX * scaleX);
+    const dataY = Math.floor(canvasY * scaleY);
+    
+    // Find nearest vector
+    const nearestVector = this.findNearestVector(dataX, dataY);
+    
+    if (nearestVector) {
+      const tooltip = document.getElementById('data-tooltip');
+      if (tooltip) {
+        tooltip.innerHTML = `
+          <strong>Position:</strong> (${dataX}, ${dataY})<br>
+          <strong>Wind Speed:</strong> ${nearestVector.magnitude.toFixed(2)} m/s<br>
+          <strong>Direction:</strong> ${this.vectorToDirection(nearestVector.vx, nearestVector.vy)}
+        `;
+        tooltip.style.left = `${canvasX + 10}px`;
+        tooltip.style.top = `${canvasY - 10}px`;
+        tooltip.style.display = 'block';
+      }
     }
   }
-
-  showLoading(message = 'Ładowanie...', progress = null) {
-    const overlay = document.getElementById('loading-overlay');
-    const text = document.getElementById('loading-text');
-    const progressBar = document.getElementById('loading-progress-bar');
-
-    if (overlay) {
-      overlay.classList.remove('hidden');
-      this.state.isLoading = true;
-    }
-
-    if (text) {
-      text.textContent = message;
-    }
-
-    if (progressBar && progress !== null) {
-      progressBar.style.width = `${progress}%`;
-    }
-  }
-
-  updateLoadingProgress(progress) {
-    const progressBar = document.getElementById('loading-progress-bar');
-    if (progressBar) {
-      progressBar.style.width = `${progress}%`;
-    }
-  }
-
-  hideLoading() {
-    const overlay = document.getElementById('loading-overlay');
-    if (overlay) {
-      overlay.classList.add('hidden');
-      this.state.isLoading = false;
-    }
-  }
-
-  onSimulationDataUpdated(data) {
-    if (this.windViz) {
-      this.windViz.setData(data);
-      this.windViz.render();
+  
+  // Find nearest vector to a point
+  findNearestVector(x, y) {
+    if (!this.state.windData?.vector_field) return null;
+    
+    let nearest = null;
+    let minDistance = Infinity;
+    
+    for (const vector of this.state.windData.vector_field) {
+      const distance = Math.sqrt((vector.x - x) ** 2 + (vector.y - y) ** 2);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearest = vector;
+      }
     }
     
-    this.updateDashboard();
-    this.updateWindStatistics();
+    return nearest;
   }
-
-  updateWindStatistics() {
-    if (!this.state.simulationData) return;
-
-    const stats = this.state.simulationData.flow_statistics || {};
-    const elements = {
-      'min-velocity': `${(stats.min_magnitude || 0).toFixed(1)} m/s`,
-      'max-velocity': `${(stats.max_magnitude || 0).toFixed(1)} m/s`,
-      'mean-velocity': `${(stats.mean_magnitude || 0).toFixed(1)} m/s`,
-      'std-velocity': `${(stats.std_magnitude || 0).toFixed(1)} m/s`,
-      'obstacle-count': (this.state.simulationData.grid_properties?.obstacle_count || 0).toLocaleString(),
-      'analysis-area': '578,000 m²' // This would be calculated from actual data
+  
+  // Convert vector to compass direction
+  vectorToDirection(vx, vy) {
+    const angle = Math.atan2(vy, vx) * 180 / Math.PI;
+    const normalizedAngle = (angle + 360) % 360;
+    
+    const directions = ['E', 'ENE', 'NE', 'NNE', 'N', 'NNW', 'NW', 'WNW', 'W', 'WSW', 'SW', 'SSW', 'S', 'SSE', 'SE', 'ESE'];
+    const index = Math.round(normalizedAngle / 22.5) % 16;
+    
+    return directions[index];
+  }
+  
+  // Resize canvas to fit container
+  resizeCanvas() {
+    if (this.canvas && this.canvas.parentElement) {
+      const container = this.canvas.parentElement;
+      const rect = container.getBoundingClientRect();
+      
+      // Set canvas size with device pixel ratio for sharp rendering
+      const dpr = window.devicePixelRatio || 1;
+      this.canvas.width = rect.width * dpr;
+      this.canvas.height = rect.height * dpr;
+      this.canvas.style.width = rect.width + 'px';
+      this.canvas.style.height = rect.height + 'px';
+      
+      if (this.ctx) {
+        this.ctx.scale(dpr, dpr);
+      }
+    }
+  }
+  
+  // Switch between application modules
+  switchModule(moduleId) {
+    console.log(`🔄 Switching to module: ${moduleId}`);
+    
+    // Update navigation active state
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.classList.remove('active');
+    });
+    document.querySelector(`[data-module="${moduleId}"]`)?.classList.add('active');
+    
+    // Update content visibility
+    document.querySelectorAll('.module').forEach(module => {
+      module.classList.remove('active');
+    });
+    document.getElementById(`${moduleId}-module`)?.classList.add('active');
+    
+    // Update breadcrumbs
+    this.updateBreadcrumbs(moduleId);
+    
+    this.state.currentModule = moduleId;
+    
+    // Module-specific initialization
+    this.initializeModule(moduleId);
+  }
+  
+  // Update breadcrumb navigation
+  updateBreadcrumbs(moduleId) {
+    const moduleNames = {
+      dashboard: 'Dashboard Overview',
+      wind: 'Wind Analysis',
+      vegetation: 'Vegetation Analysis',
+      thermal: 'Thermal Comfort',
+      scenarios: 'Scenario Management',
+      export: 'Export & Reports'
     };
-
-    Object.entries(elements).forEach(([id, value]) => {
+    
+    const breadcrumbs = document.getElementById('breadcrumbs');
+    if (breadcrumbs) {
+      breadcrumbs.innerHTML = `
+        <span class="breadcrumb-item">GIS Microclimate Platform</span>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-item active">${moduleNames[moduleId] || 'Module'}</span>
+      `;
+    }
+  }
+  
+  // Initialize specific module
+  initializeModule(moduleId) {
+    switch (moduleId) {
+      case 'wind':
+        if (this.state.windData) {
+          setTimeout(() => this.renderWindVisualization(), 100);
+        }
+        break;
+      case 'vegetation':
+        this.showModuleComingSoon('Vegetation Analysis');
+        break;
+      case 'thermal':
+        this.showModuleComingSoon('Thermal Comfort');
+        break;
+      case 'scenarios':
+        this.showModuleComingSoon('Scenario Management');
+        break;
+    }
+  }
+  
+  // Show "coming soon" message for future modules
+  showModuleComingSoon(moduleName) {
+    const moduleContent = document.getElementById(`${this.state.currentModule}-content`);
+    if (moduleContent) {
+      moduleContent.innerHTML = `
+        <div class="coming-soon">
+          <i class="fas fa-cog fa-spin fa-3x"></i>
+          <h3>${moduleName}</h3>
+          <p>This module is currently under development and will be available in future updates.</p>
+          <p>Stay tuned for advanced ${moduleName.toLowerCase()} capabilities!</p>
+        </div>
+      `;
+    }
+  }
+  
+  // Refresh data from API (only if connected)
+  async refreshData() {
+    if (!this.state.apiConnected) {
+      this.showToast('Connect to live data first to refresh', 'warning');
+      return;
+    }
+    
+    const refreshBtn = document.getElementById('refresh-btn');
+    const icon = refreshBtn?.querySelector('i');
+    
+    if (icon) icon.classList.add('fa-spin');
+    if (refreshBtn) refreshBtn.disabled = true;
+    
+    try {
+      const success = await this.loadWindDataFromAPI();
+      if (success) {
+        this.updateUI();
+        this.showToast('Data refreshed successfully', 'success');
+      } else {
+        this.showToast('Failed to refresh data from API', 'error');
+      }
+    } catch (error) {
+      console.error('Refresh failed:', error);
+      this.showToast('Failed to refresh data', 'error');
+    } finally {
+      if (icon) icon.classList.remove('fa-spin');
+      if (refreshBtn) refreshBtn.disabled = false;
+    }
+  }
+  
+  // Start auto-refresh timer (only when connected and enabled)
+  startAutoRefresh() {
+    this.stopAutoRefresh(); // Clear any existing timer
+    
+    if (this.state.apiConnected && this.state.autoRefreshEnabled) {
+      console.log(`🔄 Starting auto-refresh every ${this.config.apiConfig.refreshInterval/1000}s`);
+      
+      this.state.refreshTimer = setInterval(() => {
+        console.log('🔄 Auto-refreshing data...');
+        this.refreshData();
+      }, this.config.apiConfig.refreshInterval);
+    }
+  }
+  
+  // Stop auto-refresh timer
+  stopAutoRefresh() {
+    if (this.state.refreshTimer) {
+      clearInterval(this.state.refreshTimer);
+      this.state.refreshTimer = null;
+      console.log('⏹️  Auto-refresh stopped');
+    }
+  }
+  
+  // Update all UI components with current data
+  updateUI() {
+    console.log('🔄 Updating UI with current data');
+    
+    this.updateSystemStatus();
+    this.updateKPICards();
+    this.updateDataPanels();
+    this.updateActivityFeed();
+    
+    // Re-render visualization if on wind module
+    if (this.state.currentModule === 'wind' && this.state.windData) {
+      this.renderWindVisualization();
+    }
+  }
+  
+  // Update system status indicators
+  updateSystemStatus() {
+    const lastUpdateElement = document.getElementById('last-update');
+    
+    if (lastUpdateElement && this.state.lastUpdate) {
+      const timeStr = this.state.lastUpdate.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      lastUpdateElement.textContent = timeStr;
+    }
+    
+    // Update system status indicator
+    const statusIndicator = document.getElementById('system-status');
+    if (statusIndicator) {
+      const status = this.state.apiConnected ? 'Connected' : 'Sample Mode';
+      const className = this.state.apiConnected ? 'status-active' : 'status-warning';
+      statusIndicator.innerHTML = `<i class="fas fa-circle ${className}"></i> ${status}`;
+    }
+  }
+  
+  // Update KPI dashboard cards
+  updateKPICards() {
+    if (!this.state.windData) return;
+    
+    const stats = this.state.windData.flow_statistics;
+    const weather = this.state.windData.weather_conditions;
+    const metadata = this.state.windData.metadata;
+    
+    // Wind KPI
+    const windKPI = document.getElementById('wind-kpi-value');
+    if (windKPI && stats) {
+      windKPI.textContent = `${stats.mean_magnitude.toFixed(1)} m/s`;
+    }
+    
+    // Performance KPI  
+    const performanceKPI = document.getElementById('performance-kpi-value');
+    if (performanceKPI && metadata) {
+      performanceKPI.textContent = `${metadata.computation_time}s`;
+    }
+    
+    // Temperature KPI
+    const tempKPI = document.getElementById('temp-kpi-value');
+    if (tempKPI && weather) {
+      tempKPI.textContent = `${weather.temperature_c.toFixed(1)}°C`;
+    }
+    
+    // Data quality KPI
+    const qualityKPI = document.getElementById('quality-kpi-value');
+    if (qualityKPI && this.state.windData.vector_field) {
+      const dataPoints = this.state.windData.vector_field.length;
+      qualityKPI.textContent = `${dataPoints.toLocaleString()} pts`;
+    }
+  }
+  
+  // Update detailed data panels
+  updateDataPanels() {
+    if (!this.state.windData) return;
+    
+    const stats = this.state.windData.flow_statistics;
+    const weather = this.state.windData.weather_conditions;
+    const grid = this.state.windData.grid_properties;
+    const metadata = this.state.windData.metadata;
+    
+    // Flow statistics panel
+    const flowElements = {
+      'min-speed': stats?.min_magnitude ? `${stats.min_magnitude.toFixed(2)} m/s` : 'N/A',
+      'max-speed': stats?.max_magnitude ? `${stats.max_magnitude.toFixed(2)} m/s` : 'N/A',
+      'mean-speed': stats?.mean_magnitude ? `${stats.mean_magnitude.toFixed(2)} m/s` : 'N/A',
+      'std-speed': stats?.std_magnitude ? `${stats.std_magnitude.toFixed(2)} m/s` : 'N/A',
+      'median-speed': stats?.median_magnitude ? `${stats.median_magnitude.toFixed(2)} m/s` : 'N/A',
+      'p95-speed': stats?.percentile_95 ? `${stats.percentile_95.toFixed(2)} m/s` : 'N/A'
+    };
+    
+    // Weather conditions panel  
+    const weatherElements = {
+      'current-wind': weather ? `${weather.wind_speed_ms.toFixed(1)} m/s ${this.getWindDirectionName(weather.wind_direction_deg)}` : 'N/A',
+      'current-temp': weather ? `${weather.temperature_c.toFixed(1)}°C` : 'N/A',
+      'current-humidity': weather ? `${weather.humidity_percent}%` : 'N/A',
+      'weather-source': weather ? weather.source : 'N/A'
+    };
+    
+    // Grid information panel
+    const gridElements = {
+      'grid-size': grid ? `${grid.width.toLocaleString()}×${grid.height.toLocaleString()}` : 'N/A',
+      'obstacle-count': grid?.obstacle_count ? grid.obstacle_count.toLocaleString() : 'N/A',
+      'building-count': grid?.buildings_count ? grid.buildings_count.toLocaleString() : 'N/A',
+      'pixel-resolution': grid?.pixel_size_m ? `${grid.pixel_size_m.toFixed(1)} m` : 'N/A'
+    };
+    
+    // Simulation metadata panel
+    const metadataElements = {
+      'computation-time': metadata ? `${metadata.computation_time}s` : 'N/A',
+      'simulation-timestamp': metadata ? new Date(metadata.timestamp).toLocaleString() : 'N/A',
+      'platform-version': metadata ? metadata.version : 'N/A',
+      'data-source': this.state.apiConnected ? 'Live API' : 'Sample Data'
+    };
+    
+    // Update all elements
+    const allElements = { ...flowElements, ...weatherElements, ...gridElements, ...metadataElements };
+    
+    Object.entries(allElements).forEach(([id, value]) => {
       const element = document.getElementById(id);
       if (element) element.textContent = value;
     });
   }
-
-  onModuleStatusUpdated({ module, status, progress }) {
-    this.updateModuleStatusDisplay();
+  
+  // Update activity feed
+  updateActivityFeed() {
+    const activityList = document.getElementById('activity-list');
+    if (!activityList || !this.state.windData) return;
+    
+    const dataSource = this.state.apiConnected ? 'Live GitHub Pages API' : 'Sample Data';
+    const metadata = this.state.windData.metadata;
+    const weather = this.state.windData.weather_conditions;
+    
+    const activities = [
+      {
+        icon: 'fas fa-wind',
+        iconClass: 'wind',
+        title: 'Wind simulation completed',
+        description: `LBM computation finished in ${metadata?.computation_time || '45.2'}s using ${dataSource}`,
+        time: metadata ? this.getRelativeTime(metadata.timestamp) : 'Just now'
+      },
+      {
+        icon: 'fas fa-database',
+        iconClass: 'data', 
+        title: 'Data source active',
+        description: `Connected to ${dataSource} for real-time updates`,
+        time: '2 minutes ago'
+      },
+      {
+        icon: 'fas fa-cloud-sun',
+        iconClass: 'weather',
+        title: 'Weather conditions',
+        description: weather ? 
+          `${weather.temperature_c}°C, Wind ${weather.wind_speed_ms.toFixed(1)} m/s @ ${weather.wind_direction_deg}°` : 
+          'Sample weather data active',
+        time: '5 minutes ago'
+      },
+      {
+        icon: 'fas fa-chart-line',
+        iconClass: 'analysis',
+        title: 'Flow field analysis',
+        description: `Generated ${this.state.windData.vector_field?.length || 0} vector points for visualization`,
+        time: '8 minutes ago'
+      }
+    ];
+    
+    activityList.innerHTML = activities.map(activity => `
+      <div class="activity-item">
+        <div class="activity-icon ${activity.iconClass}">
+          <i class="${activity.icon}"></i>
+        </div>
+        <div class="activity-content">
+          <h4>${activity.title}</h4>
+          <p>${activity.description}</p>
+          <span class="activity-time">${activity.time}</span>
+        </div>
+      </div>
+    `).join('');
   }
-
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  
+  // Render wind visualization on canvas
+  renderWindVisualization() {
+    if (!this.canvas || !this.ctx || !this.state.windData) {
+      console.warn('⚠️  Cannot render: missing canvas, context, or data');
+      return;
+    }
+    
+    console.log('🎨 Rendering wind visualization');
+    
+    const canvas = this.canvas;
+    const ctx = this.ctx;
+    const data = this.state.windData;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const rect = canvas.getBoundingClientRect();
+    const canvasWidth = rect.width;
+    const canvasHeight = rect.height;
+    
+    // Calculate scaling factors
+    const scaleX = canvasWidth / data.grid_properties.width;
+    const scaleY = canvasHeight / data.grid_properties.height;
+    
+    // Render based on current visualization mode
+    switch (this.state.vizMode) {
+      case 'magnitude':
+        this.renderMagnitudeHeatmap(ctx, data, scaleX, scaleY, canvasWidth, canvasHeight);
+        break;
+      case 'vectors':
+        this.renderVectorField(ctx, data, scaleX, scaleY);
+        break;
+      case 'streamlines':
+        this.renderStreamlines(ctx, data, scaleX, scaleY, canvasWidth, canvasHeight);
+        break;
+      default:
+        this.renderMagnitudeHeatmap(ctx, data, scaleX, scaleY, canvasWidth, canvasHeight);
+    }
+    
+    // Apply opacity
+    canvas.style.opacity = this.state.opacity / 100;
+  }
+  
+  // Render magnitude field as heat map
+  renderMagnitudeHeatmap(ctx, data, scaleX, scaleY, canvasWidth, canvasHeight) {
+    const imageData = ctx.createImageData(canvasWidth, canvasHeight);
+    const pixels = imageData.data;
+    
+    const minMag = data.flow_statistics.min_magnitude;
+    const maxMag = data.flow_statistics.max_magnitude;
+    const range = maxMag - minMag;
+    
+    if (range === 0) return;
+    
+    for (let y = 0; y < canvasHeight; y++) {
+      for (let x = 0; x < canvasWidth; x++) {
+        const dataX = Math.floor(x / scaleX);
+        const dataY = Math.floor(y / scaleY);
+        
+        const magnitude = this.interpolateMagnitude(dataX, dataY, data.vector_field);
+        const normalizedMag = Math.max(0, Math.min(1, (magnitude - minMag) / range));
+        const color = this.getViridisColor(normalizedMag);
+        
+        const pixelIndex = (y * canvasWidth + x) * 4;
+        pixels[pixelIndex] = color.r;     // Red
+        pixels[pixelIndex + 1] = color.g; // Green  
+        pixels[pixelIndex + 2] = color.b; // Blue
+        pixels[pixelIndex + 3] = 200;     // Alpha
+      }
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+  }
+  
+  // Render vector field as arrows
+  renderVectorField(ctx, data, scaleX, scaleY) {
+    const vectors = data.vector_field;
+    const maxMag = data.flow_statistics.max_magnitude;
+    
+    if (maxMag === 0) return;
+    
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 1.5;
+    
+    const arrowScale = Math.min(scaleX, scaleY) * 15;
+    
+    vectors.forEach(vector => {
+      const x = vector.x * scaleX;
+      const y = vector.y * scaleY;
+      
+      const normalizedMag = vector.magnitude / maxMag;
+      const vx = (vector.vx / vector.magnitude) * arrowScale * normalizedMag;
+      const vy = (vector.vy / vector.magnitude) * arrowScale * normalizedMag;
+      
+      if (normalizedMag > 0.1) { // Only draw significant vectors
+        this.drawArrow(ctx, x, y, x + vx, y + vy);
+      }
+    });
+  }
+  
+  // Render streamlines
+  renderStreamlines(ctx, data, scaleX, scaleY, canvasWidth, canvasHeight) {
+    ctx.strokeStyle = 'rgba(100, 150, 255, 0.7)';
+    ctx.lineWidth = 1.5;
+    
+    const numStreamlines = Math.min(30, Math.floor(canvasWidth / 30));
+    const stepSize = Math.min(scaleX, scaleY) * 2;
+    const maxSteps = Math.floor(Math.max(canvasWidth, canvasHeight) / stepSize);
+    
+    for (let i = 0; i < numStreamlines; i++) {
+      const startX = (canvasWidth / (numStreamlines + 1)) * (i + 1);
+      const startY = Math.random() * canvasHeight;
+      
+      this.traceStreamline(ctx, data, startX, startY, scaleX, scaleY, stepSize, maxSteps);
+    }
+  }
+  
+  // Helper: Interpolate magnitude at a point
+  interpolateMagnitude(x, y, vectors) {
+    let nearestVector = null;
+    let minDistance = Infinity;
+    
+    for (const vector of vectors) {
+      const distance = Math.sqrt((vector.x - x) ** 2 + (vector.y - y) ** 2);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestVector = vector;
+      }
+    }
+    
+    return nearestVector ? nearestVector.magnitude : 0;
+  }
+  
+  // Helper: Interpolate vector at a point
+  interpolateVector(x, y, vectors) {
+    return this.findNearestVector(x, y);
+  }
+  
+  // Helper: Get Viridis colormap color
+  getViridisColor(value) {
+    value = Math.max(0, Math.min(1, value));
+    
+    // Viridis color scheme approximation
+    if (value < 0.25) {
+      const t = value / 0.25;
+      return {
+        r: Math.floor(68 + (72 - 68) * t),
+        g: Math.floor(1 + (40 - 1) * t),
+        b: Math.floor(84 + (120 - 84) * t)
+      };
+    } else if (value < 0.5) {
+      const t = (value - 0.25) / 0.25;
+      return {
+        r: Math.floor(72 + (94 - 72) * t),
+        g: Math.floor(40 + (79 - 40) * t),
+        b: Math.floor(120 + (162 - 120) * t)
+      };
+    } else if (value < 0.75) {
+      const t = (value - 0.5) / 0.25;
+      return {
+        r: Math.floor(94 + (134 - 94) * t),
+        g: Math.floor(79 + (120 - 79) * t),
+        b: Math.floor(162 + (142 - 162) * t)
+      };
+    } else {
+      const t = (value - 0.75) / 0.25;
+      return {
+        r: Math.floor(134 + (253 - 134) * t),
+        g: Math.floor(120 + (231 - 120) * t),
+        b: Math.floor(142 + (37 - 142) * t)
+      };
+    }
+  }
+  
+  // Helper: Draw arrow
+  drawArrow(ctx, x1, y1, x2, y2) {
+    const headSize = 4;
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    
+    // Draw line
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    
+    // Draw arrowhead
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(
+      x2 - headSize * Math.cos(angle - Math.PI / 6),
+      y2 - headSize * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      x2 - headSize * Math.cos(angle + Math.PI / 6),
+      y2 - headSize * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+  }
+  
+  // Helper: Trace streamline
+  traceStreamline(ctx, data, startX, startY, scaleX, scaleY, stepSize, maxSteps) {
+    let x = startX;
+    let y = startY;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    
+    for (let step = 0; step < maxSteps; step++) {
+      const dataX = x / scaleX;
+      const dataY = y / scaleY;
+      
+      const vector = this.interpolateVector(dataX, dataY, data.vector_field);
+      if (!vector || vector.magnitude < 0.1) break;
+      
+      const magnitude = vector.magnitude;
+      const normalizedVx = (vector.vx / magnitude) * stepSize;
+      const normalizedVy = (vector.vy / magnitude) * stepSize;
+      
+      x += normalizedVx;
+      y += normalizedVy;
+      
+      // Check bounds
+      const rect = this.canvas.getBoundingClientRect();
+      if (x < 0 || x >= rect.width || y < 0 || y >= rect.height) break;
+      
+      ctx.lineTo(x, y);
+    }
+    
+    ctx.stroke();
+  }
+  
+  // Update visualization mode
+  updateVisualization() {
+    if (this.state.currentModule === 'wind' && this.state.windData) {
+      console.log(`🎨 Updating visualization mode: ${this.state.vizMode}`);
+      this.renderWindVisualization();
+    }
+  }
+  
+  // Update canvas opacity
+  updateOpacity() {
+    if (this.canvas) {
+      this.canvas.style.opacity = this.state.opacity / 100;
+    }
+  }
+  
+  // Show loading overlay
+  showLoading(show) {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+      overlay.classList.toggle('active', show);
+    }
+    this.state.isLoading = show;
+  }
+  
+  // Show toast notification
+  showToast(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('toast-container');
+    if (!container) {
+      console.warn('⚠️  Toast container not found');
+      return;
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+      <div class="toast-content">
+        <i class="fas fa-${this.getToastIcon(type)}"></i>
+        <span>${message}</span>
+      </div>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-remove after duration
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, duration);
+    
+    // Click to dismiss
+    toast.addEventListener('click', () => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    });
+  }
+  
+  // Get icon for toast type
+  getToastIcon(type) {
+    const icons = {
+      info: 'info-circle',
+      success: 'check-circle',
+      warning: 'exclamation-triangle',
+      error: 'times-circle'
+    };
+    return icons[type] || 'info-circle';
+  }
+  
+  // Show export dialog
+  showExportDialog() {
+    const message = this.state.apiConnected ? 
+      'Export functionality will be available with your live data connection' : 
+      'Connect to live data first to enable export functionality';
+    
+    this.showToast(message, 'info');
+  }
+  
+  // Utility: Get wind direction name from degrees
+  getWindDirectionName(degrees) {
+    const directions = [
+      'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+      'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'
+    ];
+    const index = Math.round(degrees / 22.5) % 16;
+    return directions[index];
+  }
+  
+  // Utility: Get relative time string
+  getRelativeTime(timestamp) {
+    const now = new Date();
+    const time = new Date(timestamp);
+    const diffMs = now - time;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
   }
 }
 
-// Initialize the application when DOM is ready
+// Initialize platform when DOM is ready - NO AUTO API CONNECTION
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('🚀 DOM loaded - initializing GIS Microclimate Platform');
+  
   try {
-    console.log('Starting GIS Microclimate Platform initialization...');
-    window.app = new GISMicroclimateApp();
+    window.gisplatform = new GISMicroclimatePlatform();
+    console.log('✅ Platform initialized successfully');
   } catch (error) {
-    console.error('Failed to initialize application:', error);
-    
-    // Show error message to user
-    const body = document.body;
-    if (body) {
-      const errorDiv = document.createElement('div');
-      errorDiv.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #fff;
-        padding: 2rem;
-        border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        text-align: center;
-        z-index: 9999;
-      `;
-      errorDiv.innerHTML = `
-        <h3>Błąd inicjalizacji</h3>
-        <p>Aplikacja nie mogła zostać uruchomiona. Odśwież stronę.</p>
-        <button onclick="window.location.reload()" style="
-          background: #0066cc;
-          color: white;
-          border: none;
-          padding: 0.5rem 1rem;
-          border-radius: 4px;
-          cursor: pointer;
-        ">Odśwież stronę</button>
-      `;
-      body.appendChild(errorDiv);
+    console.error('❌ Platform initialization failed:', error);
+  }
+});
+
+// Handle page visibility changes
+document.addEventListener('visibilitychange', () => {
+  if (window.gisplatform) {
+    if (document.hidden) {
+      window.gisplatform.stopAutoRefresh();
+    } else if (window.gisplatform.state.apiConnected && window.gisplatform.state.autoRefreshEnabled) {
+      window.gisplatform.startAutoRefresh();
     }
   }
 });
 
-// Export for debugging
-window.AppConfig = AppConfig;
+// Handle before unload
+window.addEventListener('beforeunload', () => {
+  if (window.gisplatform) {
+    window.gisplatform.stopAutoRefresh();
+  }
+});
+
+// Export for external use
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = GISMicroclimatePlatform;
+}
