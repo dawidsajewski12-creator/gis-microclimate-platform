@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wizualizacja Mikroklimatu - Analiza Przepływu Wiatru</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Panel kontrolny -->
+        <div class="control-panel" id="controlPanel">
+            <div class="panel-header">
+                <h3>Kontrola Warstw</h3>
+                <button class="btn btn--sm" id="togglePanel" aria-label="Zwiń/rozwiń panel">←</button>
+            </div>
+            
+            <div class="panel-content">
+                <!-- Warstwy -->
+                <div class="control-section">
+                    <h4>Warstwy Mapy</h4>
+                    <div class="layer-controls">
+                        <label class="layer-checkbox">
+                            <input type="checkbox" id="windParticles" checked>
+                            <span>Cząsteczki wiatru</span>
+                        </label>
+                        <label class="layer-checkbox">
+                            <input type="checkbox" id="windStreamlines">
+                            <span>Streamlines</span>
+                        </label>
+                        <label class="layer-checkbox">
+                            <input type="checkbox" id="buildings">
+                            <span>Budynki</span>
+                        </label>
+                        <label class="layer-checkbox">
+                            <input type="checkbox" id="windContours">
+                            <span>Kontury prędkości</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Kontrolki animacji -->
+                <div class="control-section">
+                    <h4>Animacja</h4>
+                    <div class="slider-group">
+                        <label for="particleCount">Liczba cząsteczek: <span id="particleCountValue">1000</span></label>
+                        <input type="range" id="particleCount" min="100" max="5000" value="1000" step="100" class="slider">
+                    </div>
+                    <div class="slider-group">
+                        <label for="animationSpeed">Prędkość: <span id="animationSpeedValue">1.0x</span></label>
+                        <input type="range" id="animationSpeed" min="0.1" max="2.0" value="1.0" step="0.1" class="slider">
+                    </div>
+                </div>
+
+                <!-- Styl wizualizacji -->
+                <div class="control-section">
+                    <h4>Wizualizacja</h4>
+                    <select id="visualStyle" class="form-control">
+                        <option value="particles">Cząsteczki</option>
+                        <option value="streamlines">Streamlines</option>
+                        <option value="both">Oba</option>
+                    </select>
+                </div>
+
+                <!-- Narzędzia -->
+                <div class="control-section">
+                    <h4>Narzędzia</h4>
+                    <div class="tool-buttons">
+                        <button class="btn btn--secondary btn--sm" id="resetView">Reset widoku</button>
+                        <button class="btn btn--secondary btn--sm" id="fullscreen">Pełny ekran</button>
+                        <button class="btn btn--secondary btn--sm" id="exportView">Eksport PNG</button>
+                    </div>
+                </div>
+
+                <!-- Informacje o pogodzie -->
+                <div class="control-section">
+                    <h4>Informacje</h4>
+                    <div class="weather-info">
+                        <div class="info-item">
+                            <span class="info-label">Prędkość wiatru:</span>
+                            <span id="windSpeed">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Kierunek:</span>
+                            <span id="windDirection">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Pozycja:</span>
+                            <span id="mousePosition">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kontener mapy -->
+        <div class="map-container">
+            <div id="map"></div>
+            <canvas id="windCanvas"></canvas>
+            
+            <!-- Legenda -->
+            <div class="map-legend">
+                <h4>Prędkość wiatru (m/s)</h4>
+                <div class="legend-scale">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #0000ff;"></div>
+                        <span>0-2</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #00ff00;"></div>
+                        <span>2-5</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ffff00;"></div>
+                        <span>5-8</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ff0000;"></div>
+                        <span>8+</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading indicator -->
+            <div class="loading-indicator hidden" id="loadingIndicator">
+                <div class="loading-spinner"></div>
+                <span>Ładowanie danych wiatru...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
