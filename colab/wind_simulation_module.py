@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
+
 """
-run_wind_simulation.py
+wind_simulation_module.py
 ────────────────────────────────────────────────────────────────────────────
-Enhanced Lattice-Boltzmann wind-flow solver (D2Q9) z optymalizacjami wydajności
-Version: 2.3.0 - Enhanced performance and additional features
+Enhanced Lattice-Boltzmann wind-flow solver (D2Q9) - NUMBA COMPATIBLE
+Version: 2.3.1 - Fixed Numba compatibility issues
 
 Improvements:
 - Better memory management
-- Optimized particle tracking
+- Optimized particle tracking  
 - Streamline generation
 - Enhanced output formats
 - Performance monitoring
+- FIXED: Numba compatibility with array creation
 
 API:
 -----
@@ -24,15 +26,15 @@ import json
 from typing import Dict, List, Tuple, Optional
 
 # ──────────────────────────────────────────────────────────────────────────
-# ENHANCED LBM KERNEL with better performance monitoring
+# ENHANCED LBM KERNEL - NUMBA COMPATIBLE
 # ──────────────────────────────────────────────────────────────────────────
 
 @njit(parallel=True, fastmath=True, cache=True)
 def _lbm_enhanced(mask, wind_speed, wind_deg, nx, ny, max_iter, omega, 
                   enable_performance_tracking=False):
     """
-    Enhanced LBM kernel with performance optimizations:
-    - Memory-aligned arrays
+    Enhanced LBM kernel with performance optimizations - NUMBA COMPATIBLE:
+    - Memory-aligned arrays (without order parameter)
     - Reduced temporary allocations
     - Better cache utilization
     - Optional performance tracking
@@ -45,9 +47,9 @@ def _lbm_enhanced(mask, wind_speed, wind_deg, nx, ny, max_iter, omega,
     
     cx, cy = c[:, 0], c[:, 1]
     
-    # Pre-allocate arrays with better memory alignment
-    F = np.ones((ny, nx, 9), dtype=np.float64, order='C')
-    Fs = np.empty_like(F, order='C')
+    # Pre-allocate arrays - NUMBA COMPATIBLE (no order parameter)
+    F = np.ones((ny, nx, 9), dtype=np.float64)
+    Fs = np.empty((ny, nx, 9), dtype=np.float64)
     
     # Inlet velocity (meteorological to mathematical conversion)
     rad = np.deg2rad(90.0 - wind_deg)
@@ -55,9 +57,9 @@ def _lbm_enhanced(mask, wind_speed, wind_deg, nx, ny, max_iter, omega,
     v0 = 0.1 * np.sin(rad)
     
     # Macroscopic variables
-    rho = np.ones((ny, nx), dtype=np.float64, order='C')
-    ux = np.zeros((ny, nx), dtype=np.float64, order='C')  
-    uy = np.zeros((ny, nx), dtype=np.float64, order='C')
+    rho = np.ones((ny, nx), dtype=np.float64)
+    ux = np.zeros((ny, nx), dtype=np.float64)  
+    uy = np.zeros((ny, nx), dtype=np.float64)
     
     # Performance tracking arrays (if enabled)
     convergence_history = np.zeros(max_iter, dtype=np.float64) if enable_performance_tracking else None
@@ -445,7 +447,7 @@ def run_wind_simulation(obstacle_mask: np.ndarray,
     # Build enhanced results
     results = {
         "metadata": {
-            "version": "2.3.0",
+            "version": "2.3.1",
             "enhanced_features": True,
             "timestamp": time.time(),
             "computation_time": round(total_time, 2),
