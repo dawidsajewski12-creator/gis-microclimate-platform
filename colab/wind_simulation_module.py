@@ -31,13 +31,26 @@ def _lbm(mask, wind_speed, wind_deg,
                     Fs[j,i,k]=F[(j-cy[k])%ny,(i-cx[k])%nx,k]
         F,Fs = Fs,F
         # bounce-back
-        for j in prange(ny):
-            for i in range(nx):
-                if mask[j,i]:
-                    F[j,i,[1,3]]=F[j,i,[3,1]]
-                    F[j,i,[2,4]]=F[j,i,[4,2]]
-                    F[j,i,[5,7]]=F[j,i,[7,5]]
-                    F[j,i,[6,8]]=F[j,i,[8,6]]
+         for j in prange(ny):
+             for i in range(nx):
+                 if mask[j,i]:
+                     # Numba-compatible bounce-back
+                     tmp = F[j,i,1]
+                     F[j,i,1] = F[j,i,3]
+                     F[j,i,3] = tmp
+         
+                     tmp = F[j,i,2]
+                     F[j,i,2] = F[j,i,4]
+                     F[j,i,4] = tmp
+         
+                     tmp = F[j,i,5]
+                     F[j,i,5] = F[j,i,7]
+                     F[j,i,7] = tmp
+         
+                     tmp = F[j,i,6]
+                     F[j,i,6] = F[j,i,8]
+                     F[j,i,8] = tmp
+
         # macroscopic
         for j in prange(ny):
             for i in range(nx):
