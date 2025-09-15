@@ -7,7 +7,7 @@ class GISMicroclimatePlatform {
     this.config = {
       apiConfig: {
         githubBaseUrl: "https://api.github.com/repos",
-        defaultRepo: "dawidsajewski12-creator/mapy-analityczne", // Update this to your repo
+        defaultRepo: "dawidsajewski12-creator/gis-microclimate-platform", // Update this to your repo
         endpoints: {
           windSimulation: "api/data/wind_simulation/current.json",
           systemMetadata: "api/data/system/metadata.json"
