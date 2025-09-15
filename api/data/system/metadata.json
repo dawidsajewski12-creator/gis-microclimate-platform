@@ -1,0 +1,35 @@
+{
+  "timestamp": "2025-09-15T07:10:38.163889",
+  "system_status": "operational",
+  "platform_version": "2.2.0",
+  "modules": {
+    "wind_simulation": {
+      "status": "active",
+      "last_update": "2025-09-15T07:10:38.163889",
+      "computation_time": 119.71,
+      "data_points": 19272,
+      "grid_size": "850×609"
+    },
+    "vegetation_analysis": {
+      "status": "pending",
+      "last_update": null,
+      "description": "Vegetation and landcover analysis module"
+    },
+    "thermal_comfort": {
+      "status": "pending",
+      "last_update": null,
+      "description": "Thermal comfort assessment module"
+    }
+  },
+  "api_endpoints": [
+    "wind_simulation/current.json",
+    "system/metadata.json",
+    "vegetation_analysis/current.json",
+    "thermal_comfort/current.json"
+  ],
+  "github_pages": {
+    "repository": "dawidsajewski12-creator/gis-microclimate-platform",
+    "last_deployment": "2025-09-15T07:10:38.163889",
+    "auto_refresh_interval": 30000
+  }
+}
