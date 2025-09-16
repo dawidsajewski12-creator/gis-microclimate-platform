@@ -857,21 +857,20 @@ class GISMicroclimateUpgrade {
             const marker = L.marker(location.coords, { icon }).addTo(this.dashboardMap);
 
             const popupContent = `
-                <div class="location-popup">
-                    <h4>${location.name}</h4>
-                    <p>${location.description}</p>
-                    <div class="popup-details">
-                        <div class="detail-item">
-                            <strong>Status:</strong>
-                            <span class="status ${location.status}">${location.status}</span>
-                        </div>
-                        <div class="detail-item">
-                            <strong>Jakość danych:</strong>
-                            <span class="quality-${location.dataQuality}">${location.dataQuality || 'N/A'}</span>
-                        </div>
-                    </div>
+            <div class="location-popup">
+              <h4>${location.name}</h4>
+              <p>${location.description}</p>
+              <div class="popup-details">
+                <div class="detail-item">
+                  <strong>Status:</strong> 
+                  <span class="status ${location.status}">${location.status}</span>
                 </div>
-            `;
+                <div class="detail-item">
+                  <strong>Jakość danych:</strong> 
+                  <span class="quality-${location.dataQuality || 'unknown'}">${location.dataQuality || 'Brak danych'}</span>
+                </div>
+              </div>
+            </div>`;
 
             marker.bindPopup(popupContent);
         });
