@@ -42,8 +42,8 @@
                     <button class="btn btn--outline nav-btn" data-module="dashboard">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </button>
-                    <button class="btn btn--outline nav-btn" data-module="wind">
-                        <i class="fas fa-wind"></i> Analiza Wiatru
+                    <button class="btn btn--outline nav-btn" data-module="">
+                        <i class="fas fa-"></i> Analiza Wiatru
                     </button>
                     <button class="btn btn--outline nav-btn" data-module="vegetation">
                         <i class="fas fa-tree"></i> Wegetacja
@@ -87,7 +87,7 @@
                             <div class="data-grid">
                                 <div class="data-item">
                                     <div class="data-label">Średnia prędkość wiatru</div>
-                                    <div class="data-value" id="avg-wind-speed">3.2 m/s</div>
+                                    <div class="data-value" id="avg--speed">3.2 m/s</div>
                                 </div>
                                 <div class="data-item">
                                     <div class="data-label">Czas obliczeń</div>
@@ -177,7 +177,7 @@
                                 </div>
                             </div>
                             <div class="activity-item">
-                                <div class="activity-icon"><i class="fas fa-wind"></i></div>
+                                <div class="activity-icon"><i class="fas fa-"></i></div>
                                 <div class="activity-content">
                                     <h4>Warunki pogodowe</h4>
                                     <p>Prędkość wiatru 4.2 m/s, kierunek SW (225°).</p>
@@ -196,35 +196,61 @@
                     <p>Profesjonalna symulacja LBM (Lattice Boltzmann Method) z wizualizacją</p>
                 </div>
 
-                <!-- Wind Controls Panel -->
+                <!-- Dodaj do modułu wind -->
                 <div class="controls-panel">
                     <div class="control-group">
                         <label for="viz-mode">Tryb wizualizacji</label>
                         <select id="viz-mode" class="form-control">
-                            <option value="particles">Cząsteczki</option>
-                            <option value="streamlines">Linie prądu</option>
-                            <option value="vectors">Wektory</option>
+                            <option value="vectors">Wektory wiatru</option>
+                            <option value="streamlines">Linie przepływu</option>
+                            <option value="particles">Cząstki</option>
+                            <option value="heatmap">Mapa cieplna</option>
                         </select>
                     </div>
+                
                     <div class="control-group">
-                        <label for="opacity-slider">Przezroczystość (<span id="opacity-value">80</span>%)</label>
-                        <input type="range" id="opacity-slider" class="range-slider" min="10" max="100" value="80">
+                        <label for="opacity-slider">Przezroczystość: <span id="opacity-value">70%</span></label>
+                        <input type="range" id="opacity-slider" class="range-slider" min="10" max="100" value="70">
                     </div>
+                
                     <div class="control-group">
-                        <label for="particle-count">Liczba cząsteczek</label>
-                        <select id="particle-count" class="form-control">
-                            <option value="1000">1,000</option>
-                            <option value="3000">3,000</option>
-                            <option value="5000" selected>5,000</option>
-                            <option value="8000">8,000</option>
-                        </select>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-buildings" checked>
+                            <span class="checkmark"></span>
+                            Pokaż budynki
+                        </label>
                     </div>
+                
                     <div class="control-group">
-                        <button class="btn btn--primary" id="refresh-simulation">
-                            <i class="fas fa-sync-alt"></i> Odśwież Symulację
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-terrain" checked>
+                            <span class="checkmark"></span>
+                            Pokaż rzeźbę terenu
+                        </label>
+                    </div>
+                
+                    <div class="control-group">
+                        <button id="run-simulation" class="btn btn--primary">
+                            <i class="fas fa-play"></i>
+                            Uruchom symulację
                         </button>
                     </div>
                 </div>
+                
+                <!-- Mapa wiatru z canvas -->
+                <div class="visualization-container">
+                    <div id="wind-map" class="wind-map"></div>
+                    <div class="canvas-legend">
+                        <h4>Prędkość wiatru</h4>
+                        <div class="legend-gradient"></div>
+                        <div class="legend-labels">
+                            <span>0 m/s</span>
+                            <span>5 m/s</span>
+                            <span>10+ m/s</span>
+                        </div>
+                    </div>
+                </div>
+
 
                 <!-- Wind Visualization Container -->
                 <div class="visualization-container">
@@ -287,11 +313,11 @@
                             <div class="data-grid">
                                 <div class="data-item">
                                     <div class="data-label">Kierunek wiatru</div>
-                                    <div class="data-value" id="wind-direction">SW (225°)</div>
+                                    <div class="data-value" id="-direction">SW (225°)</div>
                                 </div>
                                 <div class="data-item">
                                     <div class="data-label">Prędkość podstawowa</div>
-                                    <div class="data-value" id="base-wind-speed">4.2 m/s</div>
+                                    <div class="data-value" id="base--speed">4.2 m/s</div>
                                 </div>
                                 <div class="data-item">
                                     <div class="data-label">Temperatura</div>
