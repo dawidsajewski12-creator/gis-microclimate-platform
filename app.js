@@ -1,157 +1,735 @@
-// Sample data from provided JSON 
+// Sample data from provided JSON
 // === PODSTAWOWE FUNKCJE ŁADOWANIA DANYCH ===
-
 let windSimulationData = null;
 
 async function loadWindSimulationData() {
-    const urls = [
-        'https://dawidsajewski12-creator.github.io/gis-microclimate-platform/api/data/wind_simulation/current.json',
-        'api/data/wind_simulation/current.json',
-        'data/wind_simulation_results.json'
-    ];
-
-    for (const url of urls) {
-        try {
-            console.log(`🔄 Próbuję załadować dane z: ${url}`);
-            const response = await fetch(url);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            windSimulationData = await response.json();
-            console.log('✅ Dane symulacji wiatru załadowane:', windSimulationData.metadata);
-            
-            // Walidacja danych
-            if (!windSimulationData.spatial_reference) {
-                console.warn('⚠️ Brak informacji spatial_reference w danych!');
-            } else {
-                console.log('📍 CRS danych:', windSimulationData.spatial_reference.crs);
-                console.log('🌍 Bounds WGS84:', windSimulationData.spatial_reference.bounds_wgs84);
-            }
-            
-            // Po załadowaniu danych, inicjalizuj zaawansowaną wizualizację
-            setTimeout(() => {
-                if (maps.wind) {
-                    addAdvancedWindCSS();
-                    initAdvancedWindVisualization();
-                }
-            }, 500);
-            
-            return windSimulationData;
-        } catch (error) {
-            console.warn(`❌ Nie udało się załadować z ${url}: ${error.message}`);
-            continue;
+    try {
+        const response = await fetch('data/wind_simulation_results.json');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
+        windSimulationData = await response.json();
+        console.log('Dane symulacji wiatru załadowane:', windSimulationData.metadata);
+        
+        // NOWE: Walidacja danych
+        if (!windSimulationData.spatial_reference) {
+            console.warn('Brak informacji spatial_reference w danych!');
+        } else {
+            console.log('CRS danych:', windSimulationData.spatial_reference.crs);
+            console.log('Bounds WGS84:', windSimulationData.spatial_reference.bounds_wgs84);
+        }
+        
+        // Sprawdź czy vector_field ma współrzędne geograficzne
+        if (windSimulationData.vector_field && windSimulationData.vector_field.length > 0) {
+            const firstPoint = windSimulationData.vector_field[0];
+            if (firstPoint.longitude !== undefined && firstPoint.latitude !== undefined) {
+                console.log('✅ Dane zawierają współrzędne geograficzne');
+                console.log('Przykładowy punkt:', {
+                    pixel: `(${firstPoint.pixel_x}, ${firstPoint.pixel_y})`,
+                    geo: `(${firstPoint.longitude.toFixed(6)}, ${firstPoint.latitude.toFixed(6)})`
+                });
+            } else {
+                console.error('❌ Dane NIE zawierają współrzędnych geograficznych!');
+            }
+        }
+        
+        // Po załadowaniu danych, dodaj CSS i zainicjalizuj zaawansowaną wizualizację
+        if (maps.wind) {
+            addAdvancedWindCSS();
+            initAdvancedWindVisualization();
+        }
+        
+        return windSimulationData;
+        
+    } catch (error) {
+        console.error('Błąd podczas ładowania danych symulacji wiatru:', error);
+        return null;
     }
-    
-    console.error('💥 Nie udało się załadować danych z żadnego źródła');
-    return null;
 }
 
-// Sample data structure for fallback
-const sampleData = {
-    weatherData: {
-        location: "Warszawa",
-        temperature: 22,
-        humidity: 65,
-        pressure: 1015,
-        windSpeed: 12
-    },
-    floodData: {
-        scenarios: [
-            {
-                name: "Scenario 1 - Moderate Rain",
-                coordinates: [
-                    {lat: 52.2297, lng: 21.0122, depth: 0.5, time: 30},
-                    {lat: 52.2305, lng: 21.0135, depth: 0.8, time: 45},
-                    {lat: 52.2312, lng: 21.0118, depth: 1.2, time: 60}
-                ]
-            },
-            {
-                name: "Scenario 2 - Heavy Rain",
-                coordinates: [
-                    {lat: 52.2297, lng: 21.0122, depth: 1.0, time: 15},
-                    {lat: 52.2305, lng: 21.0135, depth: 1.5, time: 30},
-                    {lat: 52.2312, lng: 21.0118, depth: 2.0, time: 45}
-                ]
-            }
-        ]
-    },
-    windData: {
-        scenarios: [
-            {name: "Normal Wind", windSpeed: 5, direction: 180},
-            {name: "Strong Wind", windSpeed: 15, direction: 270}
-        ]
-    },
-    thermalData: {
-        scenarios: [
-            {name: "Summer Day", temperature: 28, comfort: "Hot"},
-            {name: "Winter Day", temperature: -5, comfort: "Cold"}
-        ]
-    },
-    portfolioData: {
-        projects: [
-            {
-                id: 1,
-                title: "Analiza mikroklimatu obszarów zurbanizowanych",
-                category: "microclimate",
-                image: "https://via.placeholder.com/400x300/4f46e5/ffffff?text=Mikroklimat",
-                description: "Kompleksowa analiza warunków mikroklimatycznych w centrum miasta z wykorzystaniem zaawansowanych modeli CFD.",
-                technologies: ["Python", "OpenFOAM", "QGIS", "PostGIS"],
-                results: "Wzrost dokładności prognoz o 35%, identyfikacja 12 stref krytycznych."
-            },
-            {
-                id: 2,
-                title: "System prognozowania zagrożeń powodziowych",
-                category: "flood",
-                image: "https://via.placeholder.com/400x300/059669/ffffff?text=Powódź",
-                description: "Zaawansowany system wczesnego ostrzegania przed powodziami wykorzystujący uczenie maszynowe.",
-                technologies: ["TensorFlow", "Django", "PostgreSQL", "Docker"],
-                results: "Redukcja fałszywych alarmów o 60%, zwiększenie czasu ostrzeżenia o 4 godziny."
-            },
-            {
-                id: 3,
-                title: "Optymalizacja przepływu wiatru w zespołach budynków",
-                category: "wind",
-                image: "https://via.placeholder.com/400x300/dc2626/ffffff?text=Wiatr",
-                description: "Symulacja i optymalizacja przepływów powietrza wokół nowych inwestycji deweloperskich.",
-                technologies: ["ANSYS Fluent", "Rhino", "Grasshopper", "Python"],
-                results: "Poprawa komfortu wiatrowego o 45%, redukcja kosztów klimatyzacji o 20%."
-            }
-        ]
-    },
-    blogData: {
-        posts: [
-            {
-                id: 1,
-                title: "Wprowadzenie do symulacji CFD w urbanistyce",
-                excerpt: "Podstawowe zagadnienia związane z wykorzystaniem dynamiki płynów obliczeniowej w planowaniu miast.",
-                date: "2024-03-15",
-                category: "CFD",
-                readTime: 8,
-                tags: ["CFD", "urbanistyka", "symulacje"]
-            },
-            {
-                id: 2,
-                title: "Analiza wysp ciepła w dużych aglomeracjach",
-                excerpt: "Metodologia badania i przeciwdziałania zjawisku miejskich wysp ciepła z wykorzystaniem danych satelitarnych.",
-                date: "2024-03-10",
-                category: "Klimat",
-                readTime: 6,
-                tags: ["wyspa ciepła", "satelity", "temperatura"]
-            },
-            {
-                id: 3,
-                title: "Nowoczesne podejścia do modelowania powodzi miejskich",
-                excerpt: "Przegląd najnowszych technik numerycznego modelowania przepływów w środowisku zurbanizowanym.",
-                date: "2024-03-05",
-                category: "Hydrologia",
-                readTime: 10,
-                tags: ["powodzie", "modelowanie", "miasto"]
-            }
-        ]
+
+// === ZAAWANSOWANA WIZUALIZACJA WIATRU - INTEGRACJA Z DZIAŁAJĄCYM KODEM ===
+
+// Parametry konfiguracyjne wizualizacji
+const WIND_VIZ_CONFIG = {
+    PARTICLE_COUNT: 6000,
+    PARTICLE_SPEED_SCALE: 0.2,
+    PARTICLE_LIFESPAN: 1000,
+    PARTICLE_LINE_WIDTH: 1.6,
+    PARTICLE_COLOR: "rgba(110, 190, 255, 0.8)",
+    GLOW_COLOR: "rgba(110, 190, 255, 0.5)",
+    GLOW_BLUR: 7
+};
+
+// Funkcja mapowania wartości na kolor (skala Viridis)
+function getViridisColor(value, min, max) {
+    const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    const r = Math.round(255 * (0.267004 + 1.15172 * t - 2.92336 * t**2 + 1.52013 * t**3));
+    const g = Math.round(255 * (0.018623 + 2.75701 * t - 4.49472 * t**2 + 1.77533 * t**3));
+    const b = Math.round(255 * (0.354456 - 2.11226 * t + 10.5126 * t**2 - 12.3881 * t**3 + 3.63582 * t**4));
+    return `rgba(${r},${g},${b},0.6)`;
+}
+
+// Adapter danych - przekształca nasze dane na format oczekiwany przez wizualizację
+function createWindDataAdapter(rawWindData) {
+    if (!rawWindData) return null;
+    
+    // NOWE: Sprawdź czy dane zawierają współrzędne geograficzne
+    const hasGeoCoords = rawWindData.vector_field && 
+                        rawWindData.vector_field.length > 0 && 
+                        rawWindData.vector_field[0].longitude !== undefined;
+    
+    if (!hasGeoCoords) {
+        console.error('Dane symulacji nie zawierają współrzędnych geograficznych!');
+        return null;
     }
+    
+    // NOWE: Użyj prawdziwych bounds z danych zamiast hardkodowania
+    const bounds_wgs84 = rawWindData.spatial_reference?.bounds_wgs84;
+    if (!bounds_wgs84) {
+        console.error('Brak informacji o bounds_wgs84 w danych symulacji!');
+        return null;
+    }
+    
+    const bounds = L.latLngBounds(
+        [bounds_wgs84.south, bounds_wgs84.west], // SW corner
+        [bounds_wgs84.north, bounds_wgs84.east]  // NE corner  
+    );
+    
+    console.log('Używam prawdziwych bounds z danych:', bounds);
+    
+    const adapter = {
+        // Format danych zgodny z oczekiwaniami wizualizacji
+        magnitudeGrid: rawWindData.magnitude_grid,
+        gridWidth: rawWindData.magnitude_grid[0].length,
+        gridHeight: rawWindData.magnitude_grid.length,
+        bounds: bounds,  // NOWE: prawdziwe bounds
+        minMagnitude: rawWindData.flow_statistics.min_magnitude,
+        maxMagnitude: rawWindData.flow_statistics.max_magnitude,
+        
+        // NOWE: Użyj prawdziwych współrzędnych geograficznych
+        streamlines: rawWindData.streamlines.map(streamline => 
+            streamline.map(point => ({
+                ...point,
+                lat: point.latitude,   // NOWE: użyj prawdziwych współrzędnych
+                lng: point.longitude
+            }))
+        ),
+        
+        // NOWE: Użyj prawdziwych współrzędnych dla particles
+        particles: rawWindData.particles.length > 0 ? 
+            rawWindData.particles.flatMap(path => path.map(particle => ({
+            ...particle,
+            lat: particle.latitude,
+            lng: particle.longitude
+        }))) : [],
+        
+        // NOWE: Użyj prawdziwych współrzędnych dla vector field
+        vectorField: rawWindData.vector_field.map(vector => ({
+            ...vector,
+            lat: vector.latitude,     // NOWE: użyj prawdziwych współrzędnych
+            lng: vector.longitude
+        })),
+        
+        // Metadane
+        metadata: rawWindData.metadata,
+        performance: rawWindData.performance,
+        spatial_reference: rawWindData.spatial_reference  // NOWE: dodaj info o CRS
+    };
+    
+    return adapter;
+}
+
+// === VelocityLayer - Warstwa pola prędkości ===
+const AdvancedVelocityLayer = L.Layer.extend({
+    initialize: function(data, bounds) {
+        this._data = data;
+        this.bounds = bounds;
+    },
+
+    onAdd: function(map) {
+        this._map = map;
+        this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated velocity-canvas');
+        this._canvas.style.position = 'absolute';
+        map.getPanes().overlayPane.appendChild(this._canvas);
+        this._ctx = this._canvas.getContext('2d');
+
+        map.on('moveend zoomend resize', this._reset, this);
+        this._reset();
+    },
+
+    onRemove: function(map) {
+        map.getPanes().overlayPane.removeChild(this._canvas);
+        map.off('moveend zoomend resize', this._reset, this);
+    },
+
+    _reset: function() {
+        const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+        L.DomUtil.setPosition(this._canvas, topLeft);
+
+        const size = this._map.getSize();
+        this._canvas.width = size.x;
+        this._canvas.height = size.y;
+        this._canvas.style.width = size.x + 'px';
+        this._canvas.style.height = size.y + 'px';
+
+        this._draw();
+    },
+
+    _draw: function() {
+        if (!this._data.magnitudeGrid) return;
+
+        const ctx = this._ctx;
+        ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+
+        const grid = this._data.magnitudeGrid;
+        const w = this._data.gridWidth;
+        const h = this._data.gridHeight;
+        const { minMagnitude, maxMagnitude } = this._data;
+
+        const cellWidth = (this._bounds.getEast() - this._bounds.getWest()) / w;
+        const cellHeight = (this._bounds.getNorth() - this._bounds.getSouth()) / h;
+
+        for (let j = 0; j < h; j++) {
+            for (let i = 0; i < w; i++) {
+                const lat = this._bounds.getNorth() - ((j + 0.5) * cellHeight);
+                const lon = this._bounds.getWest() + ((i + 0.5) * cellWidth);
+                const point = this._map.latLngToContainerPoint([lat, lon]);
+
+                const value = grid[j] && grid[j][i] !== undefined ? grid[j][i] : NaN;
+                if (!isFinite(value)) continue;
+
+                ctx.fillStyle = getViridisColor(value, minMagnitude, maxMagnitude);
+                ctx.fillRect(Math.round(point.x - 2), Math.round(point.y - 2), 4, 4);
+            }
+        }
+    }
+});
+
+// === WindAnimationLayer - Warstwa animacji cząstek ===
+const AdvancedWindAnimationLayer = L.Layer.extend({
+    initialize: function(data, bounds) {
+        this._data = data;
+        this.bounds = bounds;
+        this._particles = [];
+        this._animationFrame = null;
+    },
+
+    onAdd: function(map) {
+        this._map = map;
+        this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated wind-canvas');
+        this._canvas.id = 'wind-canvas';
+        this._canvas.style.position = 'absolute';
+        this._canvas.style.pointerEvents = 'none';
+
+        map.getPanes().overlayPane.appendChild(this._canvas);
+        this._ctx = this._canvas.getContext('2d');
+
+        map.on('moveend zoomend resize', this._reset, this);
+        this._reset();
+        this._initializeParticles();
+        this._animate();
+    },
+
+    onRemove: function(map) {
+        if (this._animationFrame) {
+            cancelAnimationFrame(this._animationFrame);
+            this._animationFrame = null;
+        }
+        map.getPanes().overlayPane.removeChild(this._canvas);
+        map.off('moveend zoomend resize', this._reset, this);
+    },
+
+    _reset: function() {
+        const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+        L.DomUtil.setPosition(this._canvas, topLeft);
+
+        const size = this._map.getSize();
+        this._canvas.width = size.x;
+        this._canvas.height = size.y;
+        this._canvas.style.width = size.x + 'px';
+        this._canvas.style.height = size.y + 'px';
+
+        this._initializeParticles();
+    },
+
+    _initializeParticles: function() {
+        this._particles = [];
+
+        // Użyj rzeczywistych cząstek z danych jeśli są dostępne
+        if (this._data.particles && this._data.particles.length > 0) {
+            const sourceParticles = this._data.particles.slice(0, Math.min(WIND_VIZ_CONFIG.PARTICLE_COUNT, this._data.particles.length));
+
+            sourceParticles.forEach(particle => {
+                const point = this._map.latLngToContainerPoint([particle.lat, particle.lng]);
+                if (point.x >= 0 && point.x < this._canvas.width && point.y >= 0 && point.y < this._canvas.height) {
+                    this._particles.push({
+                        x: point.x,
+                        y: point.y,
+                        vx: particle.vx * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE,
+                        vy: -particle.vy * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE, // odwróć Y
+                        age: Math.random() * WIND_VIZ_CONFIG.PARTICLE_LIFESPAN,
+                        speed: particle.speed
+                    });
+                }
+            });
+        } else {
+            // Fallback - generuj losowe cząstki
+            for (let i = 0; i < WIND_VIZ_CONFIG.PARTICLE_COUNT; i++) {
+                this._particles.push(this._createRandomParticle());
+            }
+        }
+    },
+
+    _createRandomParticle: function() {
+        return {
+            x: Math.random() * this._canvas.width,
+            y: Math.random() * this._canvas.height,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 4,
+            age: Math.random() * WIND_VIZ_CONFIG.PARTICLE_LIFESPAN,
+            speed: Math.random() * 3 + 1
+        };
+    },
+
+    _animate: function() {
+        this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+
+        // Ustawienia canvas dla efektu świecenia
+        this._ctx.globalCompositeOperation = 'screen';
+        this._ctx.lineWidth = WIND_VIZ_CONFIG.PARTICLE_LINE_WIDTH;
+
+        this._particles.forEach((particle, index) => {
+            // Aktualizuj pozycję
+            const oldX = particle.x;
+            const oldY = particle.y;
+
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+            particle.age++;
+
+            // Sprawdź granice i resetuj cząstkę jeśli wyszła poza obszar lub jest za stara
+            if (particle.x < 0 || particle.x > this._canvas.width || 
+                particle.y < 0 || particle.y > this._canvas.height || 
+                particle.age > WIND_VIZ_CONFIG.PARTICLE_LIFESPAN) {
+                this._particles[index] = this._createRandomParticle();
+                return;
+            }
+
+            // Narysuj ślad cząstki
+            const alpha = Math.max(0, 1 - particle.age / WIND_VIZ_CONFIG.PARTICLE_LIFESPAN);
+            this._ctx.strokeStyle = WIND_VIZ_CONFIG.PARTICLE_COLOR.replace('0.8', alpha.toString());
+
+            this._ctx.beginPath();
+            this._ctx.moveTo(oldX, oldY);
+            this._ctx.lineTo(particle.x, particle.y);
+            this._ctx.stroke();
+        });
+
+        this._animationFrame = requestAnimationFrame(() => this._animate());
+    }
+});
+
+// === LegendControl - Kontrolka legendy ===
+const AdvancedLegendControl = L.Control.extend({
+    options: {
+        position: 'bottomright'
+    },
+
+    onAdd: function(map) {
+        this._container = L.DomUtil.create('div', 'leaflet-control legend-control');
+        this.update();
+        return this._container;
+    },
+
+    update: function(min = 0, max = 1) {
+        const gradientColors = [];
+        for (let i = 0; i <= 100; i += 10) {
+            gradientColors.push(getViridisColor(min + (i/100)*(max-min), min, max));
+        }
+
+        this._container.innerHTML = `
+            <h4>Prędkość wiatru [m/s]</h4>
+            <div class="legend-gradient" style="background: linear-gradient(to right, ${gradientColors.join(', ')});"></div>
+            <div class="legend-labels">
+                <span>${min.toFixed(1)}</span>
+                <span>${max.toFixed(1)}</span>
+            </div>
+        `;
+    }
+});
+
+// === GŁÓWNA FUNKCJA ZAAWANSOWANEJ WIZUALIZACJI ===
+function initAdvancedWindVisualization() {
+    if (!maps.wind || !windSimulationData) {
+        console.warn('Mapa wiatru lub dane nie są dostępne');
+        return;
+    }
+
+    console.log('Inicjalizacja zaawansowanej wizualizacji wiatru...');
+
+    // Przekształć dane na oczekiwany format
+    const adaptedData = createWindDataAdapter(windSimulationData);
+    if (!adaptedData) {
+        console.error('Nie udało się zaadaptować danych');
+        return;
+    }
+
+    // Wyczyść istniejące warstwy
+    maps.wind.eachLayer(layer => {
+        if (layer instanceof L.Marker || layer instanceof L.Polyline || layer instanceof L.Circle) {
+            maps.wind.removeLayer(layer);
+        }
+    });
+
+    // Usuń istniejącą warstwę heatmap
+    if (window.currentHeatLayer) {
+        maps.wind.removeLayer(window.currentHeatLayer);
+    }
+
+    // Usuń poprzednie zaawansowane warstwy jeśli istnieją
+    if (window.advancedLayers) {
+        window.advancedLayers.forEach(layer => {
+            if (maps.wind.hasLayer(layer)) {
+                maps.wind.removeLayer(layer);
+            }
+        });
+    }
+
+    // Utwórz nowe zaawansowane warstwy
+    const velocityLayer = new AdvancedVelocityLayer(adaptedData, adaptedData.bounds);
+    const windAnimLayer = new AdvancedWindAnimationLayer(adaptedData, adaptedData.bounds);
+    const legend = new AdvancedLegendControl();
+
+    // Dodaj warstwy do mapy
+    velocityLayer.addTo(maps.wind);
+    windAnimLayer.addTo(maps.wind);
+    legend.addTo(maps.wind);
+    legend.update(adaptedData.minMagnitude, adaptedData.maxMagnitude);
+
+    // Zapisz referencje do warstw
+    window.advancedLayers = [velocityLayer, windAnimLayer, legend];
+
+    // Dodaj kontrolki warstw
+    if (!window.advancedLayerControl) {
+        const overlayMaps = {
+            "Pola prędkości": velocityLayer,
+            "Przepływ wiatru": windAnimLayer
+        };
+
+        window.advancedLayerControl = L.control.layers(null, overlayMaps, { 
+            collapsed: false,
+            position: 'topright'
+        }).addTo(maps.wind);
+    }
+
+    // Ustaw mapę na właściwy obszar
+    maps.wind.fitBounds(adaptedData.bounds);
+
+    // Dodaj panel informacyjny
+    addAdvancedInfoPanel(adaptedData);
+
+    console.log('Zaawansowana wizualizacja wiatru zainicjalizowana');
+}
+
+// Funkcja dodania panelu informacyjnego
+function addAdvancedInfoPanel(data) {
+    // Usuń poprzedni panel jeśli istnieje
+    if (window.advancedInfoPanel) {
+        maps.wind.removeControl(window.advancedInfoPanel);
+    }
+
+    const infoControl = L.control({ position: 'topleft' });
+
+    infoControl.onAdd = function(map) {
+        const div = L.DomUtil.create('div', 'advanced-info-panel');
+        div.style.background = 'rgba(40, 45, 50, 0.85)';
+        div.style.backdropFilter = 'blur(5px)';
+        div.style.color = '#f0f0f0';
+        div.style.padding = '10px';
+        div.style.borderRadius = '8px';
+        div.style.boxShadow = '0 2px 10px rgba(0,0,0,0.3)';
+        div.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+        div.style.maxWidth = '300px';
+        div.style.fontSize = '12px';
+
+        div.innerHTML = `
+            <h3 style="margin: 0 0 8px 0; color: #ffffff; font-size: 16px;">Symulacja CFD - Suwałki</h3>
+            <div><strong>Cząstki:</strong> ${WIND_VIZ_CONFIG.PARTICLE_COUNT.toLocaleString()}</div>
+            <div><strong>Siatka:</strong> ${data.gridWidth} × ${data.gridHeight}</div>
+            <div><strong>Prędkość min:</strong> ${data.minMagnitude.toFixed(2)} m/s</div>
+            <div><strong>Prędkość max:</strong> ${data.maxMagnitude.toFixed(2)} m/s</div>
+            <div><strong>Czas obliczeń:</strong> ${data.metadata.computation_time}s</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #bbbbbb;">
+                Wizualizacja używa skalę kolorów Viridis i animowane cząstki.
+            </div>
+        `;
+
+        return div;
+    };
+
+    infoControl.addTo(maps.wind);
+    window.advancedInfoPanel = infoControl;
+}
+
+// === CSS Style dla zaawansowanej wizualizacji ===
+const advancedWindCSS = `
+.advanced-info-panel {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.legend-control {
+    background: rgba(40, 45, 50, 0.85) !important;
+    backdrop-filter: blur(5px);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    color: #f0f0f0;
+    line-height: 1.2;
+}
+
+.legend-control h4 {
+    margin: 0 0 5px 0;
+    font-size: 14px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.legend-gradient {
+    height: 10px;
+    width: 150px;
+    border-radius: 5px;
+}
+
+.legend-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-top: 3px;
+}
+
+.leaflet-control-layers {
+    background: rgba(40, 45, 50, 0.85) !important;
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    color: #f0f0f0 !important;
+    border-radius: 5px;
+}
+
+.velocity-canvas {
+    opacity: 0.8;
+}
+
+#wind-canvas {
+    pointer-events: none;
+}
+`;
+
+// Dodaj CSS do strony
+function addAdvancedWindCSS() {
+    if (!document.getElementById('advanced-wind-css')) {
+        const style = document.createElement('style');
+        style.id = 'advanced-wind-css';
+        style.textContent = advancedWindCSS;
+        document.head.appendChild(style);
+    }
+}
+
+console.log('Zaawansowane komponenty wizualizacji wiatru załadowane');
+
+
+const sampleData = {
+  weatherData: {
+    temperature: 22.5,
+    humidity: 65,
+    pressure: 1013.2,
+    windSpeed: 12.8,
+    windDirection: 245,
+    location: "Warszawa",
+    description: "Pochmurno z przelotnymi opadami"
+  },
+  floodData: {
+    scenarios: [
+      {
+        id: 1,
+        name: "Opady 50mm/h",
+        duration: 120,
+        maxDepth: 1.5,
+        affectedArea: 850,
+        coordinates: [
+          {lat: 52.2297, lng: 21.0122, depth: 0.8, time: 30},
+          {lat: 52.2305, lng: 21.0135, depth: 1.2, time: 45},
+          {lat: 52.2312, lng: 21.0118, depth: 0.6, time: 60},
+          {lat: 52.2285, lng: 21.0140, depth: 0.9, time: 75},
+          {lat: 52.2320, lng: 21.0100, depth: 1.1, time: 90}
+        ]
+      },
+      {
+        id: 2,
+        name: "Opady ekstremalne 100mm/h", 
+        duration: 180,
+        maxDepth: 2.8,
+        affectedArea: 1200,
+        coordinates: [
+          {lat: 52.2290, lng: 21.0115, depth: 1.5, time: 20},
+          {lat: 52.2298, lng: 21.0128, depth: 2.2, time: 35},
+          {lat: 52.2310, lng: 21.0105, depth: 2.0, time: 50},
+          {lat: 52.2275, lng: 21.0145, depth: 2.5, time: 65}
+        ]
+      }
+    ]
+  },
+  windData: {
+    scenarios: [
+      {
+        name: "Wiatr miejski - dzień",
+        windSpeed: 8.5,
+        direction: 225,
+        turbulence: 0.3,
+        particles: [
+          {x: 100, y: 150, vx: 2.5, vy: -0.8},
+          {x: 120, y: 140, vx: 3.1, vy: -1.2},
+          {x: 140, y: 135, vx: 2.8, vy: -0.9}
+        ]
+      },
+      {
+        name: "Silny wiatr - burza",
+        windSpeed: 25.2,
+        direction: 270,
+        turbulence: 0.8,
+        particles: [
+          {x: 80, y: 160, vx: 8.2, vy: -2.5},
+          {x: 110, y: 145, vx: 9.1, vy: -3.8}
+        ]
+      }
+    ]
+  },
+  thermalComfort: {
+    zones: [
+      {lat: 52.2297, lng: 21.0122, pmv: -0.5, ppd: 12, utci: 24.2, comfort: "Komfortowo"},
+      {lat: 52.2305, lng: 21.0135, pmv: 1.2, ppd: 28, utci: 29.1, comfort: "Ciepło"},
+      {lat: 52.2312, lng: 21.0118, pmv: -1.8, ppd: 45, utci: 18.5, comfort: "Chłodno"},
+      {lat: 52.2285, lng: 21.0140, pmv: 0.2, ppd: 8, utci: 25.1, comfort: "Komfortowo"},
+      {lat: 52.2320, lng: 21.0100, pmv: 2.1, ppd: 55, utci: 32.8, comfort: "Gorąco"}
+    ],
+    parameters: {
+      airTemp: 26.5,
+      humidity: 55,
+      airVelocity: 0.8,
+      meanRadiantTemp: 28.2
+    }
+  },
+  projects: [
+    {
+      id: 1,
+      title: "Analiza Zagrożenia Powodziowego - Centrum Warszawy",
+      type: "Symulacja Powodzi",
+      date: "2024-08-15",
+      location: "Warszawa",
+      description: "Kompleksowa analiza ryzyka powodziowego dla śródmieścia Warszawy z uwzględnieniem infrastruktury miejskiej.",
+      image: "https://via.placeholder.com/400x300/1e40af/ffffff?text=Analiza+Powodzi",
+      tags: ["HEC-RAS", "GIS", "Hydrologia"],
+      results: "Zidentyfikowano 5 obszarów krytycznych",
+      category: "flood"
+    },
+    {
+      id: 2,
+      title: "Optymalizacja Wentylacji Naturalnej - Kompleks Biurowy",
+      type: "Analiza Wiatru",
+      date: "2024-07-22",
+      location: "Kraków",
+      description: "Symulacja CFD przepływu powietrza wokół planowanego kompleksu biurowego w celu optymalizacji komfortu.",
+      image: "https://via.placeholder.com/400x300/059669/ffffff?text=CFD+Analiza",
+      tags: ["CFD", "ANSYS", "Aerodynamika"],
+      results: "30% poprawa wentylacji naturalnej",
+      category: "wind"
+    },
+    {
+      id: 3,
+      title: "Mapa Komfortu Termicznego - Park Miejski",
+      type: "Komfort Termiczny",
+      date: "2024-06-10",
+      location: "Gdańsk",
+      description: "Ocena bioklimatyczna przestrzeni publicznych z rekomendacjami zagospodarowania zieleni.",
+      image: "https://via.placeholder.com/400x300/dc2626/ffffff?text=Komfort+Termiczny",
+      tags: ["UTCI", "PMV", "Bioklimat"],
+      results: "Plan nasadzeń zieleni wysokiej",
+      category: "thermal"
+    },
+    {
+      id: 4,
+      title: "Modelowanie Rozprzestrzeniania Zanieczyszczeń",
+      type: "Jakość Powietrza",
+      date: "2024-05-18",
+      location: "Wrocław",
+      description: "Analiza dyspersji zanieczyszczeń atmosferycznych w rejonie dużego węzła komunikacyjnego.",
+      image: "https://via.placeholder.com/400x300/7c3aed/ffffff?text=Jakość+Powietrza",
+      tags: ["AERMOD", "Dispersion", "PM2.5"],
+      results: "Rekomendacje lokalizacji monitoringu",
+      category: "other"
+    },
+    {
+      id: 5,
+      title: "Symulacja Fal Upału - Wyspa Ciepła",
+      type: "Klimat Miejski", 
+      date: "2024-04-25",
+      location: "Łódź",
+      description: "Modelowanie temperatury powierzchni i powietrza podczas ekstremalnych upałów w centrum miasta.",
+      image: "https://via.placeholder.com/400x300/ea580c/ffffff?text=Wyspa+Ciepła",
+      tags: ["UHI", "Landsat", "Termografia"],
+      results: "Mapa intensywności wyspy ciepła",
+      category: "other"
+    },
+    {
+      id: 6,
+      title: "Ocena Ryzyka Osunięć Ziemi",
+      type: "Geomechanika",
+      date: "2024-03-12",
+      location: "Zakopane",
+      description: "Analiza stabilności stoków w rejonie zabudowy górskiej z uwzględnieniem zmian klimatycznych.",
+      image: "https://via.placeholder.com/400x300/16a34a/ffffff?text=Stabilność+Stoków",
+      tags: ["Slope Stability", "LIDAR", "Geotechnika"],
+      results: "Klasyfikacja ryzyka geotechnicznego",
+      category: "other"
+    }
+  ],
+  blogPosts: [
+    {
+      id: 1,
+      title: "Nowoczesne Metody Modelowania Powodzi Miejskich",
+      excerpt: "Przegląd najnowszych technik symulacji hydraulicznej w środowisku zurbanizowanym, w tym modele 1D/2D i ich zastosowania praktyczne.",
+      date: "2024-09-05",
+      category: "Hydrologia",
+      readTime: "8 min"
+    },
+    {
+      id: 2,
+      title: "CFD w Planowaniu Urbanistycznym - Case Study",
+      excerpt: "Jak symulacje obliczeniowej mechaniki płynów mogą wspomóc projektowanie przestrzeni miejskich przyjaznych pieszym.",
+      date: "2024-08-28",
+      category: "Aerodynamika",
+      readTime: "12 min"
+    },
+    {
+      id: 3,
+      title: "Wskaźniki Komfortu Bioklimatycznego - PMV vs UTCI",
+      excerpt: "Porównanie różnych metod oceny komfortu termicznego człowieka w przestrzeniach zewnętrznych.",
+      date: "2024-08-15",
+      category: "Bioklimat",
+      readTime: "6 min"
+    },
+    {
+      id: 4,
+      title: "Teledetekcja w Monitoringu Środowiska Miejskiego",
+      excerpt: "Zastosowanie danych satelitarnych i LIDAR w analizach przestrzennych dla potrzeb zarządzania miastem.",
+      date: "2024-07-30",
+      category: "Geomatyka", 
+      readTime: "10 min"
+    }
+  ]
 };
 
 // Global variables
@@ -163,1637 +741,818 @@ let windCanvas = null;
 let windCtx = null;
 let floodMarkers = [];
 let thermalMarkers = [];
-let windLayers = {};
-let particleAnimationLayer = null;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     // Załaduj dane symulacji wiatru na początku
     loadWindSimulationData();
-    
-    initNavigation();
-    initWeatherWidget();
-    
-    // Inicjalizacja map z opóźnieniem dla pewności załadowania DOM
-    setTimeout(() => {
-        initMaps();
-    }, 100);
-    
-    initControls();
-    initPortfolio();
-    initBlog();
-    initContactForm();
-    initParticleSystem();
-    initThemeToggle();
+
+
+  initNavigation();
+  initWeatherWidget();
+  initMaps();
+  initControls();
+  initPortfolio();
+  initBlog();
+  initContactForm();
+  initParticleSystem();
+  initThemeToggle();
 });
+
 // Navigation functions
 function initNavigation() {
-    const navToggle = document.getElementById('nav-toggle');
-    const navMenu = document.getElementById('nav-menu');
-    const navLinks = document.querySelectorAll('.nav__link');
+  const navToggle = document.getElementById('nav-toggle');
+  const navMenu = document.getElementById('nav-menu');
+  const navLinks = document.querySelectorAll('.nav__link');
 
-    // Mobile menu toggle
-    if (navToggle && navMenu) {
-        navToggle.addEventListener('click', () => {
-            navMenu.classList.toggle('active');
+  // Mobile menu toggle
+  if (navToggle) {
+    navToggle.addEventListener('click', () => {
+      navMenu.classList.toggle('active');
+    });
+  }
+
+  // Smooth scrolling for navigation links
+  navLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = link.getAttribute('href').substring(1);
+      const targetSection = document.getElementById(targetId);
+      
+      if (targetSection) {
+        const headerHeight = document.getElementById('header').offsetHeight;
+        const targetPosition = targetSection.offsetTop - headerHeight;
+        
+        window.scrollTo({
+          top: targetPosition,
+          behavior: 'smooth'
         });
+      }
+      
+      // Close mobile menu if open
+      navMenu.classList.remove('active');
+    });
+  });
+
+  // Quick access cards navigation
+  const quickCards = document.querySelectorAll('.quick-card');
+  quickCards.forEach(card => {
+    card.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = card.getAttribute('href').substring(1);
+      const targetSection = document.getElementById(targetId);
+      
+      if (targetSection) {
+        const headerHeight = document.getElementById('header').offsetHeight;
+        const targetPosition = targetSection.offsetTop - headerHeight;
+        
+        window.scrollTo({
+          top: targetPosition,
+          behavior: 'smooth'
+        });
+      }
+    });
+  });
+
+  // Header scroll effect
+  window.addEventListener('scroll', () => {
+    const header = document.getElementById('header');
+    if (window.scrollY > 100) {
+      header.style.background = 'rgba(15, 23, 42, 0.95)';
+    } else {
+      header.style.background = 'rgba(15, 23, 42, 0.9)';
     }
-
-    // Smooth scrolling for navigation links
-    navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const targetId = link.getAttribute('href').substring(1);
-            const targetSection = document.getElementById(targetId);
-            
-            if (targetSection) {
-                const header = document.getElementById('header');
-                const headerHeight = header ? header.offsetHeight : 60;
-                const targetPosition = targetSection.offsetTop - headerHeight;
-                
-                window.scrollTo({
-                    top: targetPosition,
-                    behavior: 'smooth'
-                });
-
-                // Close mobile menu if open
-                if (navMenu) {
-                    navMenu.classList.remove('active');
-                }
-            }
-        });
-    });
-
-    // Quick access cards navigation
-    const quickCards = document.querySelectorAll('.quick-card');
-    quickCards.forEach(card => {
-        card.addEventListener('click', (e) => {
-            e.preventDefault();
-            const targetId = card.getAttribute('href').substring(1);
-            const targetSection = document.getElementById(targetId);
-            
-            if (targetSection) {
-                const header = document.getElementById('header');
-                const headerHeight = header ? header.offsetHeight : 60;
-                const targetPosition = targetSection.offsetTop - headerHeight;
-                
-                window.scrollTo({
-                    top: targetPosition,
-                    behavior: 'smooth'
-                });
-            }
-        });
-    });
-
-    // Header scroll effect
-    window.addEventListener('scroll', () => {
-        const header = document.getElementById('header');
-        if (header) {
-            if (window.scrollY > 100) {
-                header.style.background = 'rgba(15, 23, 42, 0.95)';
-            } else {
-                header.style.background = 'rgba(15, 23, 42, 0.9)';
-            }
-        }
-    });
+  });
 }
 
 // Theme toggle
 function initThemeToggle() {
-    const themeToggle = document.getElementById('theme-toggle');
-    
-    if (themeToggle) {
-        const themeIcon = themeToggle.querySelector('i');
-        
-        themeToggle.addEventListener('click', () => {
-            document.body.classList.toggle('light-theme');
-            
-            if (themeIcon) {
-                if (document.body.classList.contains('light-theme')) {
-                    themeIcon.className = 'fas fa-sun';
-                } else {
-                    themeIcon.className = 'fas fa-moon';
-                }
-            }
-        });
-    }
+  const themeToggle = document.getElementById('theme-toggle');
+  const themeIcon = themeToggle.querySelector('i');
+  
+  if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('light-theme');
+      
+      if (document.body.classList.contains('light-theme')) {
+        themeIcon.className = 'fas fa-sun';
+      } else {
+        themeIcon.className = 'fas fa-moon';
+      }
+    });
+  }
 }
 
 // Weather widget
 function initWeatherWidget() {
-    const weatherData = sampleData.weatherData;
-    
-    const locationEl = document.getElementById('weather-location');
-    const tempEl = document.getElementById('temperature');
-    const humidityEl = document.getElementById('humidity');
-    const pressureEl = document.getElementById('pressure');
-    const windSpeedEl = document.getElementById('wind-speed');
-    
-    if (locationEl) locationEl.textContent = weatherData.location;
-    if (tempEl) tempEl.textContent = `${weatherData.temperature}°C`;
-    if (humidityEl) humidityEl.textContent = `${weatherData.humidity}%`;
-    if (pressureEl) pressureEl.textContent = `${weatherData.pressure} hPa`;
-    if (windSpeedEl) windSpeedEl.textContent = `${weatherData.windSpeed} km/h`;
+  const weatherData = sampleData.weatherData;
+  
+  document.getElementById('weather-location').textContent = weatherData.location;
+  document.getElementById('temperature').textContent = `${weatherData.temperature}°C`;
+  document.getElementById('humidity').textContent = `${weatherData.humidity}%`;
+  document.getElementById('pressure').textContent = `${weatherData.pressure} hPa`;
+  document.getElementById('wind-speed').textContent = `${weatherData.windSpeed} km/h`;
 }
 
 // Map initialization
 function initMaps() {
-    console.log('🗺️ Inicjalizuję mapy...');
-    
-    // Main dashboard map
-    initMainMap();
-    
-    // Flood simulation map
-    initFloodMap();
-    
-    // Wind analysis map
-    initWindMap();
-    
-    // Thermal comfort map
-    initThermalMap();
-    
-    // Contact map
-    initContactMap();
-    
-    console.log('✅ Mapy zainicjalizowane:', Object.keys(maps));
+  // Main dashboard map
+  initMainMap();
+  
+  // Flood simulation map
+  initFloodMap();
+  
+  // Wind analysis map
+  initWindMap();
+  
+  // Thermal comfort map
+  initThermalMap();
+  
+  // Contact map
+  initContactMap();
 }
 
 function initMainMap() {
-    const mapContainer = document.getElementById('main-map');
-    if (!mapContainer) {
-        console.warn('⚠️ Nie znaleziono kontenera main-map');
-        return;
+  const mapContainer = document.getElementById('main-map');
+  if (!mapContainer) return;
+
+  maps.main = L.map('main-map').setView([52.2297, 21.0122], 11);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(maps.main);
+
+  // Add sample markers for different data layers
+  const floodMarker = L.marker([52.2297, 21.0122])
+    .bindPopup('<b>Zagrożenie powodziowe</b><br>Głębokość: 0.8m')
+    .addTo(maps.main);
+
+  const thermalMarker = L.marker([52.2305, 21.0135])
+    .bindPopup('<b>Komfort termiczny</b><br>PMV: -0.5 (Komfortowo)')
+    .addTo(maps.main);
+
+  // Layer control
+  const layerControls = {
+    'flood-layer': floodMarker,
+    'thermal-layer': thermalMarker
+  };
+
+  Object.keys(layerControls).forEach(layerId => {
+    const checkbox = document.getElementById(layerId);
+    if (checkbox) {
+      checkbox.addEventListener('change', (e) => {
+        const layer = layerControls[layerId];
+        if (e.target.checked) {
+          maps.main.addLayer(layer);
+        } else {
+          maps.main.removeLayer(layer);
+        }
+      });
     }
-
-    try {
-        maps.main = L.map('main-map').setView([52.2297, 21.0122], 11);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(maps.main);
-
-        // Add sample markers for different data layers
-        const floodMarker = L.marker([52.2297, 21.0122])
-            .bindPopup('<strong>Zagrożenie powodziowe</strong><br>Głębokość: 0.8m')
-            .addTo(maps.main);
-
-        const thermalMarker = L.marker([52.2305, 21.0135])
-            .bindPopup('<strong>Komfort termiczny</strong><br>PMV: -0.5 (Komfortowo)')
-            .addTo(maps.main);
-
-        // Layer control
-        const layerControls = {
-            'flood-layer': floodMarker,
-            'thermal-layer': thermalMarker
-        };
-
-        Object.keys(layerControls).forEach(layerId => {
-            const checkbox = document.getElementById(layerId);
-            if (checkbox) {
-                checkbox.addEventListener('change', (e) => {
-                    const layer = layerControls[layerId];
-                    if (e.target.checked) {
-                        maps.main.addLayer(layer);
-                    } else {
-                        maps.main.removeLayer(layer);
-                    }
-                });
-            }
-        });
-        
-        console.log('✅ Main map initialized');
-    } catch (error) {
-        console.error('❌ Błąd inicjalizacji main map:', error);
-    }
+  });
 }
 
 function initFloodMap() {
-    const mapContainer = document.getElementById('flood-map');
-    if (!mapContainer) {
-        console.warn('⚠️ Nie znaleziono kontenera flood-map');
-        return;
-    }
+  const mapContainer = document.getElementById('flood-map');
+  if (!mapContainer) return;
 
-    try {
-        maps.flood = L.map('flood-map').setView([52.2297, 21.0122], 13);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(maps.flood);
+  maps.flood = L.map('flood-map').setView([52.2297, 21.0122], 13);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(maps.flood);
 
-        setTimeout(() => {
-            updateFloodVisualization();
-        }, 500);
-        
-        console.log('✅ Flood map initialized');
-    } catch (error) {
-        console.error('❌ Błąd inicjalizacji flood map:', error);
-    }
+  updateFloodVisualization();
 }
 
 function initWindMap() {
-    const mapContainer = document.getElementById('wind-map');
-    if (!mapContainer) {
-        console.warn('⚠️ Nie znaleziono kontenera wind-map');
-        return;
-    }
+  const mapContainer = document.getElementById('wind-map');
+  if (!mapContainer) return;
 
-    try {
-        maps.wind = L.map('wind-map').setView([52.2297, 21.0122], 14);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(maps.wind);
+  maps.wind = L.map('wind-map').setView([52.2297, 21.0122], 14);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(maps.wind);
 
-        setTimeout(() => {
-            updateWindVisualization();
-        }, 500);
-        
-        console.log('✅ Wind map initialized');
-    } catch (error) {
-        console.error('❌ Błąd inicjalizacji wind map:', error);
-    }
+  updateWindVisualization();
 }
 
 function initThermalMap() {
-    const mapContainer = document.getElementById('thermal-map');
-    if (!mapContainer) {
-        console.warn('⚠️ Nie znaleziono kontenera thermal-map');
-        return;
-    }
+  const mapContainer = document.getElementById('thermal-map');
+  if (!mapContainer) return;
 
-    try {
-        maps.thermal = L.map('thermal-map').setView([52.2297, 21.0122], 14);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(maps.thermal);
+  maps.thermal = L.map('thermal-map').setView([52.2297, 21.0122], 14);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(maps.thermal);
 
-        setTimeout(() => {
-            updateThermalVisualization();
-        }, 500);
-        
-        console.log('✅ Thermal map initialized');
-    } catch (error) {
-        console.error('❌ Błąd inicjalizacji thermal map:', error);
-    }
+  updateThermalVisualization();
 }
 
 function initContactMap() {
-    const mapContainer = document.getElementById('contact-map');
-    if (!mapContainer) {
-        console.warn('⚠️ Nie znaleziono kontenera contact-map');
-        return;
-    }
+  const mapContainer = document.getElementById('contact-map');
+  if (!mapContainer) return;
 
-    try {
-        maps.contact = L.map('contact-map').setView([52.2297, 21.0122], 15);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(maps.contact);
+  maps.contact = L.map('contact-map').setView([52.2297, 21.0122], 15);
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(maps.contact);
 
-        L.marker([52.2297, 21.0122])
-            .bindPopup('<strong>Biuro</strong><br>ul. Naukowa 15/20<br>00-001 Warszawa')
-            .addTo(maps.contact);
-            
-        console.log('✅ Contact map initialized');
-    } catch (error) {
-        console.error('❌ Błąd inicjalizacji contact map:', error);
-    }
+  L.marker([52.2297, 21.0122])
+    .bindPopup('<b>Biuro</b><br>ul. Naukowa 15/20<br>00-001 Warszawa')
+    .addTo(maps.contact);
 }
-// Controls initialization
+
+// Control initialization
 function initControls() {
-    // Flood scenario selector
-    const floodScenario = document.getElementById('flood-scenario');
-    if (floodScenario) {
-        floodScenario.addEventListener('change', (e) => {
-            console.log('Zmiana scenariusza powodzi:', e.target.value);
-            updateFloodVisualization(e.target.value);
-        });
-    }
+  // Flood simulation controls
+  const floodScenario = document.getElementById('flood-scenario');
+  const timeSlider = document.getElementById('time-slider');
+  const timeValue = document.getElementById('time-value');
+  const playButton = document.getElementById('play-animation');
 
-    // Wind scenario selector
-    const windScenario = document.getElementById('wind-scenario');
-    if (windScenario) {
-        windScenario.addEventListener('change', (e) => {
-            console.log('Zmiana scenariusza wiatru:', e.target.value);
-            updateWindVisualization(e.target.value);
-        });
-    }
-
-    // Thermal scenario selector
-    const thermalScenario = document.getElementById('thermal-scenario');
-    if (thermalScenario) {
-        thermalScenario.addEventListener('change', (e) => {
-            console.log('Zmiana scenariusza termicznego:', e.target.value);
-            updateThermalVisualization(e.target.value);
-        });
-    }
-
-    // Animation controls
-    const animationToggle = document.getElementById('animation-toggle');
-    if (animationToggle) {
-        animationToggle.addEventListener('click', toggleAnimation);
-    }
-
-    const animationSpeed = document.getElementById('animation-speed');
-    if (animationSpeed) {
-        animationSpeed.addEventListener('input', (e) => {
-            updateAnimationSpeed(e.target.value);
-        });
-    }
-
-    // Tab controls
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    const tabContents = document.querySelectorAll('.tab-content');
-
-    tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const targetTab = button.dataset.tab;
-            
-            // Remove active class from all buttons and contents
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabContents.forEach(content => content.classList.remove('active'));
-            
-            // Add active class to clicked button and corresponding content
-            button.classList.add('active');
-            const targetContent = document.getElementById(`${targetTab}-content`);
-            if (targetContent) {
-                targetContent.classList.add('active');
-                
-                // Refresh map when tab becomes active
-                setTimeout(() => {
-                    if (maps[targetTab]) {
-                        maps[targetTab].invalidateSize();
-                    }
-                }, 100);
-            }
-        });
+  if (floodScenario) {
+    floodScenario.addEventListener('change', updateFloodVisualization);
+  }
+  
+  if (timeSlider && timeValue) {
+    timeSlider.addEventListener('input', (e) => {
+      timeValue.textContent = e.target.value;
+      updateFloodVisualization();
     });
+  }
+
+  if (playButton) {
+    playButton.addEventListener('click', toggleFloodAnimation);
+  }
+
+  // Wind analysis controls
+  const windScenario = document.getElementById('wind-scenario');
+  const windSpeedSlider = document.getElementById('wind-speed-slider');
+  const windSpeedDisplay = document.getElementById('wind-speed-display');
+  const showParticles = document.getElementById('show-particles');
+  const showVectors = document.getElementById('show-vectors');
+
+  if (windScenario) {
+    windScenario.addEventListener('change', updateWindVisualization);
+  }
+  
+  if (windSpeedSlider && windSpeedDisplay) {
+    windSpeedSlider.addEventListener('input', (e) => {
+      windSpeedDisplay.textContent = e.target.value;
+      updateWindVisualization();
+    });
+  }
+
+  if (showParticles) {
+    showParticles.addEventListener('change', updateParticleVisibility);
+  }
+
+  if (showVectors) {
+    showVectors.addEventListener('change', updateVectorVisibility);
+  }
+
+  // Thermal comfort controls
+  const comfortIndex = document.getElementById('comfort-index');
+  const airTempSlider = document.getElementById('air-temp-slider');
+  const airTempDisplay = document.getElementById('air-temp-display');
+  const airVelocitySlider = document.getElementById('air-velocity-slider');
+  const airVelocityDisplay = document.getElementById('air-velocity-display');
+
+  if (comfortIndex) {
+    comfortIndex.addEventListener('change', updateThermalVisualization);
+  }
+  
+  if (airTempSlider && airTempDisplay) {
+    airTempSlider.addEventListener('input', (e) => {
+      airTempDisplay.textContent = e.target.value;
+      updateThermalVisualization();
+    });
+  }
+  
+  if (airVelocitySlider && airVelocityDisplay) {
+    airVelocitySlider.addEventListener('input', (e) => {
+      airVelocityDisplay.textContent = e.target.value;
+      updateThermalVisualization();
+    });
+  }
 }
 
-// Visualization update functions
-function updateFloodVisualization(scenarioId = '0') {
-    if (!maps.flood) {
-        console.warn('⚠️ Mapa powodzi nie jest zainicjalizowana');
-        return;
-    }
+// Flood simulation functions
+function updateFloodVisualization() {
+  if (!maps.flood) return;
 
-    // Clear existing markers
-    floodMarkers.forEach(marker => maps.flood.removeLayer(marker));
-    floodMarkers = [];
+  // Clear existing markers
+  floodMarkers.forEach(marker => maps.flood.removeLayer(marker));
+  floodMarkers = [];
 
-    const scenario = sampleData.floodData.scenarios[parseInt(scenarioId)];
-    if (!scenario) {
-        console.warn('⚠️ Nie znaleziono scenariusza powodzi:', scenarioId);
-        return;
-    }
+  const scenarioSelect = document.getElementById('flood-scenario');
+  const timeSlider = document.getElementById('time-slider');
+  
+  if (!scenarioSelect || !timeSlider) return;
 
-    scenario.coordinates.forEach(point => {
-        const color = point.depth > 1.0 ? '#dc2626' : point.depth > 0.5 ? '#f59e0b' : '#3b82f6';
+  const scenarioIndex = parseInt(scenarioSelect.value);
+  const currentTime = parseInt(timeSlider.value);
+  const scenario = sampleData.floodData.scenarios[scenarioIndex];
+
+  if (scenario) {
+    scenario.coordinates.forEach(coord => {
+      if (currentTime >= coord.time) {
+        const color = getFloodColor(coord.depth);
+        const radius = coord.depth * 50;
+
+        const marker = L.circle([coord.lat, coord.lng], {
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.6,
+          radius: radius
+        }).bindPopup(`<b>Głębokość: ${coord.depth}m</b><br>Czas: ${coord.time} min`);
         
-        const marker = L.circleMarker([point.lat, point.lng], {
-            radius: Math.min(point.depth * 10, 20),
-            color: color,
-            fillColor: color,
-            fillOpacity: 0.6,
-            weight: 2
-        }).bindPopup(`
-            <strong>Zagrożenie powodziowe</strong><br>
-            Głębokość: ${point.depth}m<br>
-            Czas dotarcia: ${point.time} min
-        `);
-
         marker.addTo(maps.flood);
         floodMarkers.push(marker);
+      }
     });
-
-    console.log(`✅ Zaktualizowano wizualizację powodzi dla scenariusza: ${scenario.name}`);
+  }
 }
 
-function updateWindVisualization(scenarioId = '0') {
-    if (!maps.wind) {
-        console.warn('⚠️ Mapa wiatru nie jest zainicjalizowana');
-        return;
-    }
-
-    const scenario = sampleData.windData.scenarios[parseInt(scenarioId)];
-    if (!scenario) {
-        console.warn('⚠️ Nie znaleziono scenariusza wiatru:', scenarioId);
-        return;
-    }
-
-    // Clear existing visualization
-    Object.values(windLayers).forEach(layer => {
-        maps.wind.removeLayer(layer);
-    });
-    windLayers = {};
-
-    // Add wind arrows based on scenario
-    const gridSize = 0.002;
-    const centerLat = 52.2297;
-    const centerLng = 21.0122;
-
-    for (let i = -3; i <= 3; i++) {
-        for (let j = -3; j <= 3; j++) {
-            const lat = centerLat + i * gridSize;
-            const lng = centerLng + j * gridSize;
-            
-            const windArrow = createWindArrow([lat, lng], scenario.windSpeed, scenario.direction);
-            windArrow.addTo(maps.wind);
-            windLayers[`arrow_${i}_${j}`] = windArrow;
-        }
-    }
-
-    // Add wind particles if data loaded
-    if (windSimulationData) {
-        addWindParticles();
-    }
-
-    console.log(`✅ Zaktualizowano wizualizację wiatru dla scenariusza: ${scenario.name}`);
+function getFloodColor(depth) {
+  if (depth < 0.5) return '#3B82F6';
+  if (depth < 1) return '#10B981';
+  if (depth < 2) return '#F59E0B';
+  return '#EF4444';
 }
 
-function createWindArrow(position, speed, direction) {
-    const arrowIcon = L.divIcon({
-        html: `<div class="wind-arrow" style="transform: rotate(${direction}deg); opacity: ${Math.min(speed / 20, 1)}">
-                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                       <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2Z"/>
-                   </svg>
-               </div>`,
-        className: 'wind-marker',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
-    });
+function toggleFloodAnimation() {
+  const playButton = document.getElementById('play-animation');
+  const timeSlider = document.getElementById('time-slider');
 
-    return L.marker(position, { icon: arrowIcon })
-        .bindPopup(`Prędkość wiatru: ${speed} m/s<br>Kierunek: ${direction}°`);
+  if (!playButton || !timeSlider) return;
+
+  if (animationPlaying) {
+    clearInterval(animationInterval);
+    animationPlaying = false;
+    playButton.innerHTML = '<i class="fas fa-play"></i> Odtwórz';
+  } else {
+    animationPlaying = true;
+    playButton.innerHTML = '<i class="fas fa-pause"></i> Zatrzymaj';
+    
+    animationInterval = setInterval(() => {
+      let currentTime = parseInt(timeSlider.value);
+      currentTime += 5;
+      
+      if (currentTime > 180) {
+        currentTime = 0;
+      }
+      
+      timeSlider.value = currentTime;
+      document.getElementById('time-value').textContent = currentTime;
+      updateFloodVisualization();
+    }, 500);
+  }
 }
 
-function updateThermalVisualization(scenarioId = '0') {
-    if (!maps.thermal) {
-        console.warn('⚠️ Mapa komfortu termicznego nie jest zainicjalizowana');
-        return;
+// Wind analysis functions
+function updateWindVisualization() {
+  if (!maps.wind) return;
+
+  // Clear existing markers
+  maps.wind.eachLayer(layer => {
+    if (layer instanceof L.Marker && layer.options.icon && layer.options.icon.options.className === 'wind-marker') {
+      maps.wind.removeLayer(layer);
     }
+  });
 
-    // Clear existing markers
-    thermalMarkers.forEach(marker => maps.thermal.removeLayer(marker));
-    thermalMarkers = [];
+  const scenarioSelect = document.getElementById('wind-scenario');
+  if (!scenarioSelect) return;
 
-    const scenario = sampleData.thermalData.scenarios[parseInt(scenarioId)];
-    if (!scenario) {
-        console.warn('⚠️ Nie znaleziono scenariusza termicznego:', scenarioId);
-        return;
-    }
+  const scenarioIndex = parseInt(scenarioSelect.value);
+  const scenario = sampleData.windData.scenarios[scenarioIndex];
 
-    // Create thermal comfort zones
-    const zones = [
-        { lat: 52.2297, lng: 21.0122, temp: scenario.temperature, comfort: scenario.comfort },
-        { lat: 52.2305, lng: 21.0135, temp: scenario.temperature + 2, comfort: getComfortLevel(scenario.temperature + 2) },
-        { lat: 52.2290, lng: 21.0108, temp: scenario.temperature - 1, comfort: getComfortLevel(scenario.temperature - 1) },
-        { lat: 52.2310, lng: 21.0140, temp: scenario.temperature + 1, comfort: getComfortLevel(scenario.temperature + 1) }
+  if (scenario) {
+    // Add wind speed markers
+    const markers = [
+      {lat: 52.2297, lng: 21.0122, speed: scenario.windSpeed * 0.8},
+      {lat: 52.2305, lng: 21.0135, speed: scenario.windSpeed * 1.2},
+      {lat: 52.2312, lng: 21.0118, speed: scenario.windSpeed * 0.9}
     ];
 
-    zones.forEach(zone => {
-        const color = getThermalColor(zone.temp);
-        
-        const marker = L.circleMarker([zone.lat, zone.lng], {
-            radius: 15,
-            color: color,
-            fillColor: color,
-            fillOpacity: 0.7,
-            weight: 3
-        }).bindPopup(`
-            <strong>Komfort termiczny</strong><br>
-            Temperatura: ${zone.temp}°C<br>
-            Komfort: ${zone.comfort}
-        `);
-
-        marker.addTo(maps.thermal);
-        thermalMarkers.push(marker);
+    markers.forEach(marker => {
+      const color = getWindColor(marker.speed);
+      L.marker([marker.lat, marker.lng], {
+        icon: L.divIcon({
+          className: 'wind-marker',
+          html: `<div style="background: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`,
+          iconSize: [16, 16]
+        })
+      }).bindPopup(`<b>Prędkość wiatru: ${marker.speed.toFixed(1)} m/s</b>`)
+        .addTo(maps.wind);
     });
+  }
 
-    console.log(`✅ Zaktualizowano wizualizację komfortu termicznego dla scenariusza: ${scenario.name}`);
+  updateParticles();
 }
 
-function getComfortLevel(temperature) {
-    if (temperature < 10) return "Zimno";
-    if (temperature < 20) return "Chłodno";
-    if (temperature < 26) return "Komfortowo";
-    if (temperature < 30) return "Ciepło";
-    return "Gorąco";
+function getWindColor(speed) {
+  if (speed < 5) return '#10B981';
+  if (speed < 15) return '#F59E0B';
+  return '#EF4444';
 }
 
-function getThermalColor(temperature) {
-    if (temperature < 10) return '#1e3a8a';
-    if (temperature < 20) return '#3b82f6';
-    if (temperature < 26) return '#10b981';
-    if (temperature < 30) return '#f59e0b';
-    return '#dc2626';
-}
+// Thermal comfort functions
+function updateThermalVisualization() {
+  if (!maps.thermal) return;
 
-// Animation functions
-function toggleAnimation() {
-    animationPlaying = !animationPlaying;
+  // Clear existing markers
+  thermalMarkers.forEach(marker => maps.thermal.removeLayer(marker));
+  thermalMarkers = [];
+
+  const indexSelect = document.getElementById('comfort-index');
+  if (!indexSelect) return;
+
+  const index = indexSelect.value;
+  
+  sampleData.thermalComfort.zones.forEach(zone => {
+    let value, label;
     
-    const toggleButton = document.getElementById('animation-toggle');
-    if (toggleButton) {
-        toggleButton.textContent = animationPlaying ? 'Stop Animation' : 'Start Animation';
+    switch(index) {
+      case 'pmv':
+        value = zone.pmv;
+        label = `PMV: ${value}`;
+        break;
+      case 'ppd':
+        value = zone.ppd;
+        label = `PPD: ${value}%`;
+        break;
+      case 'utci':
+        value = zone.utci;
+        label = `UTCI: ${value}°C`;
+        break;
     }
 
-    if (animationPlaying) {
-        startAnimation();
-    } else {
-        stopAnimation();
-    }
+    const color = getComfortColor(zone.comfort);
+    
+    const marker = L.circle([zone.lat, zone.lng], {
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.6,
+      radius: 100
+    }).bindPopup(`<b>${label}</b><br>${zone.comfort}`);
+    
+    marker.addTo(maps.thermal);
+    thermalMarkers.push(marker);
+  });
 }
 
-function startAnimation() {
-    if (!animationInterval) {
-        animationInterval = setInterval(() => {
-            updateParticles();
-            animateWindFlow();
-        }, 100);
-    }
+function getComfortColor(comfort) {
+  switch(comfort) {
+    case 'Chłodno': return '#3B82F6';
+    case 'Komfortowo': return '#10B981';
+    case 'Ciepło': return '#F59E0B';
+    case 'Gorąco': return '#EF4444';
+    default: return '#EF4444';
+  }
 }
 
-function stopAnimation() {
-    if (animationInterval) {
-        clearInterval(animationInterval);
-        animationInterval = null;
-    }
+// Particle system for wind visualization
+function initParticleSystem() {
+  windCanvas = document.getElementById('wind-particles');
+  if (!windCanvas) return;
+
+  windCtx = windCanvas.getContext('2d');
+  resizeCanvas();
+  
+  window.addEventListener('resize', resizeCanvas);
+  
+  // Initialize particles
+  for (let i = 0; i < 50; i++) {
+    particles.push(createParticle());
+  }
+  
+  animateParticles();
 }
 
-function updateAnimationSpeed(speed) {
-    if (animationInterval) {
-        clearInterval(animationInterval);
-        animationInterval = setInterval(() => {
-            updateParticles();
-            animateWindFlow();
-        }, 200 - speed * 10);
-    }
+function resizeCanvas() {
+  if (!windCanvas || !windCanvas.parentElement) return;
+  
+  windCanvas.width = windCanvas.parentElement.offsetWidth;
+  windCanvas.height = windCanvas.parentElement.offsetHeight;
 }
+
+function createParticle() {
+  return {
+    x: Math.random() * (windCanvas?.width || 800),
+    y: Math.random() * (windCanvas?.height || 500),
+    vx: (Math.random() - 0.5) * 4,
+    vy: (Math.random() - 0.5) * 2,
+    life: Math.random() * 100 + 50,
+    maxLife: 150
+  };
+}
+
+function updateParticles() {
+  const scenarioSelect = document.getElementById('wind-scenario');
+  const windSpeedSlider = document.getElementById('wind-speed-slider');
+  
+  if (!scenarioSelect || !windSpeedSlider) return;
+
+  const scenarioIndex = parseInt(scenarioSelect.value);
+  const windSpeed = parseFloat(windSpeedSlider.value);
+  
+  // Update particle velocities based on wind
+  particles.forEach(particle => {
+    particle.vx = (Math.random() - 0.3) * windSpeed * 0.3;
+    particle.vy = (Math.random() - 0.5) * windSpeed * 0.1;
+  });
+}
+
+function animateParticles() {
+  if (!windCtx || !windCanvas) return;
+  
+  windCtx.clearRect(0, 0, windCanvas.width, windCanvas.height);
+  
+  const showParticlesCheckbox = document.getElementById('show-particles');
+  const showParticles = showParticlesCheckbox ? showParticlesCheckbox.checked : true;
+  
+  if (showParticles) {
+    particles.forEach((particle, index) => {
+      // Update position
+      particle.x += particle.vx;
+      particle.y += particle.vy;
+      particle.life--;
+      
+      // Reset particle if it goes off screen or dies
+      if (particle.x < 0 || particle.x > windCanvas.width || 
+          particle.y < 0 || particle.y > windCanvas.height || 
+          particle.life <= 0) {
+        particles[index] = createParticle();
+        return;
+      }
+      
+      // Draw particle
+      const alpha = particle.life / particle.maxLife;
+      windCtx.fillStyle = `rgba(50, 184, 198, ${alpha})`;
+      windCtx.beginPath();
+      windCtx.arc(particle.x, particle.y, 2, 0, Math.PI * 2);
+      windCtx.fill();
+    });
+  }
+  
+  requestAnimationFrame(animateParticles);
+}
+
+function updateParticleVisibility() {
+  // Particles visibility is handled in animateParticles function
+}
+
+function updateVectorVisibility() {
+  // Vector visibility would be implemented here for more advanced wind visualization
+}
+
 // Portfolio functions
 function initPortfolio() {
-    console.log('🎨 Inicjalizuję portfolio...');
-    
-    const portfolioContainer = document.getElementById('portfolio-items');
-    if (!portfolioContainer) {
-        console.warn('⚠️ Nie znaleziono kontenera portfolio');
-        return;
-    }
-
-    const portfolioData = sampleData.portfolioData;
-    
-    portfolioData.projects.forEach(project => {
-        const projectElement = createProjectElement(project);
-        portfolioContainer.appendChild(projectElement);
-    });
-
-    // Portfolio filters
-    initPortfolioFilters();
-    
-    console.log('✅ Portfolio zainicjalizowane');
+  renderPortfolio();
+  initPortfolioFilters();
+  initProjectModal();
 }
 
-function createProjectElement(project) {
-    const projectDiv = document.createElement('div');
-    projectDiv.className = `portfolio-item ${project.category}`;
-    projectDiv.innerHTML = `
-        <div class="portfolio-card">
-            <div class="portfolio-image">
-                <img src="${project.image}" alt="${project.title}" loading="lazy">
-                <div class="portfolio-overlay">
-                    <h3>${project.title}</h3>
-                    <p>${project.description}</p>
-                    <div class="project-tech">
-                        ${project.technologies.map(tech => `<span class="tech-tag">${tech}</span>`).join('')}
-                    </div>
-                </div>
-            </div>
-            <div class="portfolio-content">
-                <div class="project-results">
-                    <strong>Rezultaty:</strong> ${project.results}
-                </div>
-                <button class="btn-secondary portfolio-details" data-project-id="${project.id}">
-                    Zobacz szczegóły
-                </button>
-            </div>
+function renderPortfolio() {
+  const portfolioGrid = document.getElementById('portfolio-grid');
+  if (!portfolioGrid) return;
+
+  portfolioGrid.innerHTML = sampleData.projects.map(project => `
+    <div class="project-card" data-category="${project.category}" data-id="${project.id}">
+      <img src="${project.image}" alt="${project.title}" loading="lazy">
+      <div class="project-card__content">
+        <div class="project-card__meta">
+          <span>${project.type}</span>
+          <span>${project.date}</span>
         </div>
-    `;
-    
-    // Add click handler for details
-    const detailsBtn = projectDiv.querySelector('.portfolio-details');
-    detailsBtn.addEventListener('click', () => showProjectDetails(project));
-    
-    return projectDiv;
+        <h3>${project.title}</h3>
+        <p>${project.description}</p>
+        <div class="project-tags">
+          ${project.tags.map(tag => `<span class="project-tag">${tag}</span>`).join('')}
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Add click handlers
+  document.querySelectorAll('.project-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const projectId = parseInt(card.dataset.id);
+      showProjectModal(projectId);
+    });
+  });
 }
 
 function initPortfolioFilters() {
-    const filterButtons = document.querySelectorAll('.portfolio-filter');
-    const portfolioItems = document.querySelectorAll('.portfolio-item');
+  const filterButtons = document.querySelectorAll('.filter-btn');
+  const projectCards = document.querySelectorAll('.project-card');
 
-    filterButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const filter = button.dataset.filter;
-            
-            // Update active button
-            filterButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            
-            // Filter items
-            portfolioItems.forEach(item => {
-                if (filter === 'all' || item.classList.contains(filter)) {
-                    item.style.display = 'block';
-                    item.style.animation = 'fadeInUp 0.5s ease-out';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-        });
+  filterButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const filter = button.dataset.filter;
+
+      // Update active button
+      filterButtons.forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
+
+      // Filter projects
+      projectCards.forEach(card => {
+        if (filter === 'all' || card.dataset.category === filter) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
     });
+  });
 }
 
-function showProjectDetails(project) {
-    // Create modal with project details
-    const modal = document.createElement('div');
-    modal.className = 'project-modal';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>${project.title}</h2>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <img src="${project.image}" alt="${project.title}" class="modal-image">
-                <div class="modal-details">
-                    <h3>Opis projektu</h3>
-                    <p>${project.description}</p>
-                    
-                    <h3>Technologie</h3>
-                    <div class="tech-list">
-                        ${project.technologies.map(tech => `<span class="tech-tag">${tech}</span>`).join('')}
-                    </div>
-                    
-                    <h3>Osiągnięte rezultaty</h3>
-                    <p>${project.results}</p>
-                    
-                    <div class="modal-actions">
-                        <a href="#contact" class="btn-primary">Skontaktuj się</a>
-                        <button class="btn-secondary modal-close">Zamknij</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // Close modal handlers
-    const closeButtons = modal.querySelectorAll('.modal-close');
-    closeButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.body.removeChild(modal);
-        });
-    });
-    
-    // Close on outside click
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            document.body.removeChild(modal);
-        }
-    });
+function initProjectModal() {
+  const modal = document.getElementById('project-modal');
+  const overlay = document.getElementById('modal-overlay');
+  const closeBtn = document.getElementById('modal-close');
+
+  [overlay, closeBtn].forEach(element => {
+    if (element) {
+      element.addEventListener('click', () => {
+        modal.classList.add('hidden');
+      });
+    }
+  });
+}
+
+function showProjectModal(projectId) {
+  const project = sampleData.projects.find(p => p.id === projectId);
+  if (!project) return;
+
+  const modalBody = document.getElementById('modal-body');
+  modalBody.innerHTML = `
+    <img src="${project.image}" alt="${project.title}" style="width: 100%; border-radius: 8px; margin-bottom: 16px;">
+    <h2>${project.title}</h2>
+    <div style="display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 14px; color: var(--color-text-secondary);">
+      <span>${project.type}</span>
+      <span>${project.location}</span>
+      <span>${project.date}</span>
+    </div>
+    <p>${project.description}</p>
+    <div style="margin: 20px 0;">
+      <h4>Wyniki:</h4>
+      <p>${project.results}</p>
+    </div>
+    <div>
+      <h4>Technologie:</h4>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+        ${project.tags.map(tag => `<span class="project-tag">${tag}</span>`).join('')}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('project-modal').classList.remove('hidden');
 }
 
 // Blog functions
 function initBlog() {
-    console.log('📝 Inicjalizuję blog...');
-    
-    const blogContainer = document.getElementById('blog-posts');
-    if (!blogContainer) {
-        console.warn('⚠️ Nie znaleziono kontenera blog-posts');
-        return;
-    }
+  const blogGrid = document.getElementById('blog-grid');
+  if (!blogGrid) return;
 
-    const blogData = sampleData.blogData;
-    
-    blogData.posts.forEach(post => {
-        const postElement = createBlogPostElement(post);
-        blogContainer.appendChild(postElement);
-    });
-    
-    console.log('✅ Blog zainicjalizowany');
+  blogGrid.innerHTML = sampleData.blogPosts.map(post => `
+    <article class="blog-card">
+      <div class="blog-card__meta">
+        <span class="blog-category">${post.category}</span>
+        <span>${post.readTime}</span>
+      </div>
+      <h3>${post.title}</h3>
+      <p>${post.excerpt}</p>
+      <div style="margin-top: 16px; font-size: 14px; color: var(--color-text-secondary);">
+        ${post.date}
+      </div>
+    </article>
+  `).join('');
 }
 
-function createBlogPostElement(post) {
-    const postDiv = document.createElement('article');
-    postDiv.className = 'blog-post';
-    postDiv.innerHTML = `
-        <div class="blog-card">
-            <div class="blog-header">
-                <div class="blog-meta">
-                    <span class="blog-date">${formatDate(post.date)}</span>
-                    <span class="blog-category">${post.category}</span>
-                    <span class="blog-time">${post.readTime} min czytania</span>
-                </div>
-            </div>
-            <div class="blog-content">
-                <h3 class="blog-title">
-                    <a href="#blog-post-${post.id}" class="blog-link">${post.title}</a>
-                </h3>
-                <p class="blog-excerpt">${post.excerpt}</p>
-                <div class="blog-tags">
-                    ${post.tags.map(tag => `<span class="blog-tag">#${tag}</span>`).join('')}
-                </div>
-                <div class="blog-actions">
-                    <a href="#blog-post-${post.id}" class="read-more">Czytaj więcej</a>
-                    <div class="blog-social">
-                        <button class="social-share" data-platform="twitter" data-post-id="${post.id}">
-                            <i class="fab fa-twitter"></i>
-                        </button>
-                        <button class="social-share" data-platform="linkedin" data-post-id="${post.id}">
-                            <i class="fab fa-linkedin"></i>
-                        </button>
-                        <button class="social-share" data-platform="facebook" data-post-id="${post.id}">
-                            <i class="fab fa-facebook"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Add click handlers
-    const readMoreLink = postDiv.querySelector('.read-more');
-    const titleLink = postDiv.querySelector('.blog-link');
-    
-    [readMoreLink, titleLink].forEach(link => {
-        if (link) {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                showBlogPost(post);
-            });
-        }
-    });
-    
-    // Social share handlers
-    const socialButtons = postDiv.querySelectorAll('.social-share');
-    socialButtons.forEach(button => {
-        button.addEventListener('click', (e) => {
-            e.preventDefault();
-            const platform = button.dataset.platform;
-            sharePost(post, platform);
-        });
-    });
-    
-    return postDiv;
-}
-
-function showBlogPost(post) {
-    // Create full blog post modal/page
-    const modal = document.createElement('div');
-    modal.className = 'blog-modal';
-    modal.innerHTML = `
-        <div class="blog-modal-content">
-            <div class="blog-modal-header">
-                <button class="blog-modal-close">&times;</button>
-                <div class="blog-modal-meta">
-                    <h1>${post.title}</h1>
-                    <div class="blog-modal-info">
-                        <span class="modal-date">${formatDate(post.date)}</span>
-                        <span class="modal-category">${post.category}</span>
-                        <span class="modal-time">${post.readTime} min czytania</span>
-                    </div>
-                    <div class="modal-tags">
-                        ${post.tags.map(tag => `<span class="modal-tag">#${tag}</span>`).join('')}
-                    </div>
-                </div>
-            </div>
-            <div class="blog-modal-body">
-                <div class="blog-full-content">
-                    <p class="blog-lead">${post.excerpt}</p>
-                    
-                    <h2>Wprowadzenie</h2>
-                    <p>To jest przykładowa treść artykułu. W rzeczywistej aplikacji tutaj byłby pełny tekst artykułu załadowany z bazy danych lub pliku markdown.</p>
-                    
-                    <h2>Główne zagadnienia</h2>
-                    <p>Szczegółowe omówienie tematu z przykładami i ilustracjami.</p>
-                    
-                    <h2>Podsumowanie</h2>
-                    <p>Kluczowe wnioski i dalsze kierunki rozwoju.</p>
-                    
-                    <div class="blog-author">
-                        <h3>O autorze</h3>
-                        <p>Specjalista ds. analiz mikroklimatycznych i symulacji środowiskowych.</p>
-                    </div>
-                    
-                    <div class="blog-comments">
-                        <h3>Komentarze</h3>
-                        <div class="comment-form">
-                            <textarea placeholder="Dodaj komentarz..." rows="4"></textarea>
-                            <button class="btn-primary">Dodaj komentarz</button>
-                        </div>
-                        <div class="comments-list">
-                            <div class="comment">
-                                <strong>Anna K.</strong>
-                                <span class="comment-date">2 dni temu</span>
-                                <p>Bardzo ciekawy artykuł! Czy są jakieś rekomendacje dotyczące implementacji?</p>
-                            </div>
-                            <div class="comment">
-                                <strong>Marcin P.</strong>
-                                <span class="comment-date">1 dzień temu</span>
-                                <p>Świetne wyjaśnienie złożonych zagadnień. Dzięki za praktyczne przykłady!</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
-    
-    // Close modal handler
-    const closeButton = modal.querySelector('.blog-modal-close');
-    closeButton.addEventListener('click', () => {
-        document.body.removeChild(modal);
-        document.body.style.overflow = '';
-    });
-    
-    // Close on outside click
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            document.body.removeChild(modal);
-            document.body.style.overflow = '';
-        }
-    });
-    
-    // Prevent modal content click from closing
-    const modalContent = modal.querySelector('.blog-modal-content');
-    modalContent.addEventListener('click', (e) => {
-        e.stopPropagation();
-    });
-}
-
-function sharePost(post, platform) {
-    const url = encodeURIComponent(window.location.href);
-    const title = encodeURIComponent(post.title);
-    const text = encodeURIComponent(post.excerpt);
-    
-    let shareUrl = '';
-    
-    switch(platform) {
-        case 'twitter':
-            shareUrl = `https://twitter.com/intent/tweet?text=${title}&url=${url}`;
-            break;
-        case 'facebook':
-            shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
-            break;
-        case 'linkedin':
-            shareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${url}`;
-            break;
-    }
-    
-    if (shareUrl) {
-        window.open(shareUrl, '_blank', 'width=600,height=400');
-    }
-}
-
-function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pl-PL', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-}
 // Contact form
 function initContactForm() {
-    console.log('📧 Inicjalizuję formularz kontaktowy...');
-    
-    const contactForm = document.getElementById('contact-form');
-    if (!contactForm) {
-        console.warn('⚠️ Nie znaleziono formularza kontaktowego');
-        return;
-    }
-
-    contactForm.addEventListener('submit', handleContactSubmit);
-    
-    // Real-time validation
-    const formInputs = contactForm.querySelectorAll('input, textarea');
-    formInputs.forEach(input => {
-        input.addEventListener('blur', validateField);
-        input.addEventListener('input', clearFieldError);
-    });
-    
-    console.log('✅ Formularz kontaktowy zainicjalizowany');
-}
-
-function handleContactSubmit(e) {
-    e.preventDefault();
-    
-    const form = e.target;
-    const formData = new FormData(form);
-    
-    // Validate form
-    if (!validateContactForm(form)) {
-        return;
-    }
-    
-    // Show loading state
-    const submitButton = form.querySelector('button[type="submit"]');
-    const originalText = submitButton.textContent;
-    submitButton.textContent = 'Wysyłanie...';
-    submitButton.disabled = true;
-    
-    // Simulate form submission
-    setTimeout(() => {
-        showContactSuccess();
+  const form = document.getElementById('contact-form');
+  
+  if (form) {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData);
+      
+      // Show loading
+      showLoadingSpinner();
+      
+      // Simulate form submission
+      setTimeout(() => {
+        hideLoadingSpinner();
+        alert('Dziękujemy za wiadomość! Skontaktujemy się wkrótce.');
         form.reset();
-        submitButton.textContent = originalText;
-        submitButton.disabled = false;
-    }, 2000);
-}
-
-function validateContactForm(form) {
-    let isValid = true;
-    const fields = form.querySelectorAll('input, textarea');
-    
-    fields.forEach(field => {
-        if (!validateField({ target: field })) {
-            isValid = false;
-        }
+      }, 2000);
     });
-    
-    return isValid;
+  }
 }
 
-function validateField(e) {
-    const field = e.target;
-    const value = field.value.trim();
-    const fieldType = field.type;
-    const fieldName = field.name;
-    
-    let isValid = true;
-    let errorMessage = '';
-    
-    // Remove existing error
-    clearFieldError({ target: field });
-    
-    // Required field validation
-    if (field.hasAttribute('required') && !value) {
-        isValid = false;
-        errorMessage = 'To pole jest wymagane';
-    }
-    
-    // Email validation
-    else if (fieldType === 'email' && value) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(value)) {
-            isValid = false;
-            errorMessage = 'Nieprawidłowy format email';
-        }
-    }
-    
-    // Phone validation
-    else if (fieldName === 'phone' && value) {
-        const phoneRegex = /^[+]?[\d\s\-\(\)]{9,15}$/;
-        if (!phoneRegex.test(value)) {
-            isValid = false;
-            errorMessage = 'Nieprawidłowy numer telefonu';
-        }
-    }
-    
-    // Message length validation
-    else if (fieldName === 'message' && value && value.length < 10) {
-        isValid = false;
-        errorMessage = 'Wiadomość musi mieć co najmniej 10 znaków';
-    }
-    
-    if (!isValid) {
-        showFieldError(field, errorMessage);
-    }
-    
-    return isValid;
-}
-
-function showFieldError(field, message) {
-    field.classList.add('error');
-    
-    // Remove existing error message
-    const existingError = field.parentNode.querySelector('.field-error');
-    if (existingError) {
-        existingError.remove();
-    }
-    
-    // Add new error message
-    const errorElement = document.createElement('span');
-    errorElement.className = 'field-error';
-    errorElement.textContent = message;
-    field.parentNode.appendChild(errorElement);
-}
-
-function clearFieldError(e) {
-    const field = e.target;
-    field.classList.remove('error');
-    
-    const errorElement = field.parentNode.querySelector('.field-error');
-    if (errorElement) {
-        errorElement.remove();
-    }
-}
-
-function showContactSuccess() {
-    // Create success modal
-    const modal = document.createElement('div');
-    modal.className = 'success-modal';
-    modal.innerHTML = `
-        <div class="success-content">
-            <div class="success-icon">
-                <i class="fas fa-check-circle"></i>
-            </div>
-            <h2>Wiadomość wysłana!</h2>
-            <p>Dziękujemy za kontakt. Odpowiemy w ciągu 24 godzin.</p>
-            <button class="btn-primary success-close">OK</button>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // Close modal handler
-    const closeButton = modal.querySelector('.success-close');
-    closeButton.addEventListener('click', () => {
-        document.body.removeChild(modal);
-    });
-    
-    // Auto close after 3 seconds
-    setTimeout(() => {
-        if (document.body.contains(modal)) {
-            document.body.removeChild(modal);
-        }
-    }, 3000);
-}
-
-// Particle system
-function initParticleSystem() {
-    console.log('✨ Inicjalizuję system cząstek...');
-    
-    const hero = document.getElementById('hero');
-    if (!hero) {
-        console.warn('⚠️ Nie znaleziono sekcji hero');
-        return;
-    }
-
-    // Create canvas for particles
-    const canvas = document.createElement('canvas');
-    canvas.className = 'particles-canvas';
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    hero.appendChild(canvas);
-
-    const ctx = canvas.getContext('2d');
-
-    // Initialize particles
-    particles = [];
-    for (let i = 0; i < 50; i++) {
-        particles.push(createParticle(canvas.width, canvas.height));
-    }
-
-    // Animation loop
-    function animateParticles() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        particles.forEach((particle, index) => {
-            updateParticle(particle, canvas.width, canvas.height);
-            drawParticle(ctx, particle);
-        });
-        
-        requestAnimationFrame(animateParticles);
-    }
-    
-    animateParticles();
-
-    // Handle window resize
-    window.addEventListener('resize', () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        
-        // Reinitialize particles
-        particles = [];
-        for (let i = 0; i < 50; i++) {
-            particles.push(createParticle(canvas.width, canvas.height));
-        }
-    });
-    
-    console.log('✅ System cząstek zainicjalizowany');
-}
-
-function createParticle(canvasWidth, canvasHeight) {
-    return {
-        x: Math.random() * canvasWidth,
-        y: Math.random() * canvasHeight,
-        vx: (Math.random() - 0.5) * 2,
-        vy: (Math.random() - 0.5) * 2,
-        radius: Math.random() * 3 + 1,
-        opacity: Math.random() * 0.5 + 0.2,
-        color: `hsla(${Math.random() * 60 + 200}, 70%, 60%, ${Math.random() * 0.5 + 0.2})`
-    };
-}
-
-function updateParticle(particle, canvasWidth, canvasHeight) {
-    particle.x += particle.vx;
-    particle.y += particle.vy;
-    
-    // Bounce off edges
-    if (particle.x <= 0 || particle.x >= canvasWidth) {
-        particle.vx *= -1;
-    }
-    if (particle.y <= 0 || particle.y >= canvasHeight) {
-        particle.vy *= -1;
-    }
-    
-    // Keep within bounds
-    particle.x = Math.max(0, Math.min(canvasWidth, particle.x));
-    particle.y = Math.max(0, Math.min(canvasHeight, particle.y));
-}
-
-function drawParticle(ctx, particle) {
-    ctx.beginPath();
-    ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-    ctx.fillStyle = particle.color;
-    ctx.fill();
-}
-
-function updateParticles() {
-    // Update particle positions for wind animation
-    particles.forEach(particle => {
-        updateParticle(particle, window.innerWidth, window.innerHeight);
-    });
-}
-
-// Advanced wind visualization functions
-function addAdvancedWindCSS() {
-    if (document.getElementById('advanced-wind-css')) return;
-    
-    const style = document.createElement('style');
-    style.id = 'advanced-wind-css';
-    style.textContent = `
-        .wind-streamline {
-            stroke: #3b82f6;
-            stroke-width: 2;
-            fill: none;
-            opacity: 0.7;
-            animation: windFlow 3s ease-in-out infinite;
-        }
-        
-        .wind-vector {
-            fill: #1d4ed8;
-            stroke: #1e40af;
-            stroke-width: 1;
-        }
-        
-        .wind-particle {
-            fill: #60a5fa;
-            opacity: 0.8;
-            animation: particleMove 2s linear infinite;
-        }
-        
-        @keyframes windFlow {
-            0%, 100% { stroke-dashoffset: 0; }
-            50% { stroke-dashoffset: 10; }
-        }
-        
-        @keyframes particleMove {
-            0% { transform: translateX(0) translateY(0); opacity: 1; }
-            100% { transform: translateX(20px) translateY(-5px); opacity: 0; }
-        }
-        
-        .wind-legend {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 8px;
-            padding: 10px;
-            font-size: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .wind-speed-low { stroke: #10b981; }
-        .wind-speed-medium { stroke: #f59e0b; }
-        .wind-speed-high { stroke: #ef4444; }
-    `;
-    document.head.appendChild(style);
-}
-
-function initAdvancedWindVisualization() {
-    if (!windSimulationData || !maps.wind) {
-        console.warn('⚠️ Brak danych wiatru lub mapy');
-        return;
-    }
-    
-    console.log('🌪️ Inicjalizuję zaawansowaną wizualizację wiatru...');
-    
-    try {
-        // Add wind legend
-        addWindLegend();
-        
-        // Add streamlines if data available
-        if (windSimulationData.streamlines) {
-            addWindStreamlines();
-        }
-        
-        // Add vector field
-        if (windSimulationData.vector_field) {
-            addWindVectorField();
-        }
-        
-        // Add measurement points
-        if (windSimulationData.measurement_points) {
-            addWindMeasurementPoints();
-        }
-        
-        console.log('✅ Zaawansowana wizualizacja wiatru zainicjalizowana');
-    } catch (error) {
-        console.error('❌ Błąd inicjalizacji wizualizacji wiatru:', error);
-    }
-}
-
-function addWindLegend() {
-    const legend = L.control({ position: 'bottomright' });
-    
-    legend.onAdd = function() {
-        const div = L.DomUtil.create('div', 'wind-legend');
-        div.innerHTML = `
-            <h4>Prędkość wiatru</h4>
-            <div><span style="color: #10b981;">●</span> Niska (0-5 m/s)</div>
-            <div><span style="color: #f59e0b;">●</span> Średnia (5-10 m/s)</div>
-            <div><span style="color: #ef4444;">●</span> Wysoka (>10 m/s)</div>
-        `;
-        return div;
-    };
-    
-    legend.addTo(maps.wind);
-}
-
-function addWindStreamlines() {
-    if (!windSimulationData.streamlines) return;
-    
-    windSimulationData.streamlines.forEach((streamline, index) => {
-        const coordinates = streamline.coordinates.map(coord => [coord[1], coord[0]]); // lon,lat to lat,lon
-        
-        const polyline = L.polyline(coordinates, {
-            color: getWindSpeedColor(streamline.avg_speed),
-            weight: Math.max(2, Math.min(8, streamline.avg_speed * 0.8)),
-            opacity: 0.7,
-            className: 'wind-streamline'
-        });
-        
-        polyline.bindPopup(`
-            <strong>Streamline ${index + 1}</strong><br>
-            Średnia prędkość: ${streamline.avg_speed.toFixed(1)} m/s<br>
-            Kierunek: ${streamline.direction}°
-        `);
-        
-        polyline.addTo(maps.wind);
-        windLayers[`streamline_${index}`] = polyline;
-    });
-}
-
-function addWindVectorField() {
-    if (!windSimulationData.vector_field) return;
-    
-    windSimulationData.vector_field.forEach((vector, index) => {
-        const position = [vector.lat, vector.lon];
-        const speed = Math.sqrt(vector.u * vector.u + vector.v * vector.v);
-        const direction = Math.atan2(vector.v, vector.u) * 180 / Math.PI;
-        
-        const arrowIcon = L.divIcon({
-            html: `<div class="wind-vector-arrow" style="
-                transform: rotate(${direction}deg);
-                color: ${getWindSpeedColor(speed)};
-                font-size: ${Math.max(12, Math.min(24, speed * 2))}px;
-            ">→</div>`,
-            className: 'wind-vector',
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-        });
-        
-        const marker = L.marker(position, { icon: arrowIcon });
-        marker.bindPopup(`
-            <strong>Wektor wiatru</strong><br>
-            Prędkość: ${speed.toFixed(1)} m/s<br>
-            Kierunek: ${direction.toFixed(0)}°<br>
-            U: ${vector.u.toFixed(1)} m/s<br>
-            V: ${vector.v.toFixed(1)} m/s
-        `);
-        
-        marker.addTo(maps.wind);
-        windLayers[`vector_${index}`] = marker;
-    });
-}
-
-function addWindMeasurementPoints() {
-    if (!windSimulationData.measurement_points) return;
-    
-    windSimulationData.measurement_points.forEach((point, index) => {
-        const marker = L.circleMarker([point.lat, point.lon], {
-            radius: 8,
-            color: getWindSpeedColor(point.wind_speed),
-            fillColor: getWindSpeedColor(point.wind_speed),
-            fillOpacity: 0.8,
-            weight: 2
-        });
-        
-        marker.bindPopup(`
-            <strong>Punkt pomiarowy</strong><br>
-            Prędkość: ${point.wind_speed.toFixed(1)} m/s<br>
-            Kierunek: ${point.wind_direction}°<br>
-            Wysokość: ${point.height}m<br>
-            Turbulencja: ${point.turbulence ? point.turbulence.toFixed(2) : 'N/A'}
-        `);
-        
-        marker.addTo(maps.wind);
-        windLayers[`measurement_${index}`] = marker;
-    });
-}
-
-function getWindSpeedColor(speed) {
-    if (speed <= 5) return '#10b981';
-    if (speed <= 10) return '#f59e0b';
-    return '#ef4444';
-}
-
-function addWindParticles() {
-    // Create animated particles following wind flow
-    if (!windSimulationData.vector_field) return;
-    
-    const particleCount = Math.min(20, windSimulationData.vector_field.length);
-    
-    for (let i = 0; i < particleCount; i++) {
-        const vector = windSimulationData.vector_field[i];
-        if (!vector) continue;
-        
-        const startPos = [vector.lat, vector.lon];
-        const speed = Math.sqrt(vector.u * vector.u + vector.v * vector.v);
-        
-        // Create particle marker
-        const particle = L.circleMarker(startPos, {
-            radius: 3,
-            color: '#60a5fa',
-            fillColor: '#60a5fa',
-            fillOpacity: 0.8,
-            weight: 1,
-            className: 'wind-particle'
-        });
-        
-        particle.addTo(maps.wind);
-        windLayers[`particle_${i}`] = particle;
-        
-        // Animate particle movement
-        animateWindParticle(particle, vector, speed);
-    }
-}
-
-function animateWindParticle(particle, vector, speed) {
-    const duration = 3000 / Math.max(speed, 1); // Faster for higher speeds
-    const steps = 30;
-    const stepDuration = duration / steps;
-    
-    let step = 0;
-    const startLat = vector.lat;
-    const startLng = vector.lon;
-    
-    const interval = setInterval(() => {
-        step++;
-        const progress = step / steps;
-        
-        // Calculate new position based on wind vector
-        const deltaLat = (vector.v * progress * 0.001); // Small movement
-        const deltaLng = (vector.u * progress * 0.001);
-        
-        const newPos = [startLat + deltaLat, startLng + deltaLng];
-        particle.setLatLng(newPos);
-        
-        // Update opacity
-        particle.setStyle({ fillOpacity: 0.8 * (1 - progress) });
-        
-        if (step >= steps) {
-            clearInterval(interval);
-            // Reset particle
-            particle.setLatLng([startLat, startLng]);
-            particle.setStyle({ fillOpacity: 0.8 });
-            
-            // Restart animation
-            setTimeout(() => animateWindParticle(particle, vector, speed), 1000);
-        }
-    }, stepDuration);
-}
-
-function animateWindFlow() {
-    // Update wind visualization
-    if (windLayers && Object.keys(windLayers).length > 0) {
-        Object.keys(windLayers).forEach(key => {
-            if (key.startsWith('particle_')) {
-                const particle = windLayers[key];
-                // Additional particle animation logic
-            }
-        });
-    }
-}
 // Utility functions
-function debounce(func, wait, immediate) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            timeout = null;
-            if (!immediate) func(...args);
-        };
-        const callNow = immediate && !timeout;
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-        if (callNow) func(...args);
-    };
+function showLoadingSpinner() {
+  const spinner = document.getElementById('loading-spinner');
+  if (spinner) {
+    spinner.classList.remove('hidden');
+  }
 }
 
-function throttle(func, limit) {
-    let inThrottle;
-    return function() {
-        const args = arguments;
-        const context = this;
-        if (!inThrottle) {
-            func.apply(context, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    };
+function hideLoadingSpinner() {
+  const spinner = document.getElementById('loading-spinner');
+  if (spinner) {
+    spinner.classList.add('hidden');
+  }
 }
 
-// Error handling
-window.addEventListener('error', function(e) {
-    console.error('🚨 JavaScript Error:', e.error);
-    
-    // Show user-friendly error message for critical errors
-    if (e.error && e.error.message && e.error.message.includes('map')) {
-        showNotification('Wystąpił problem z ładowaniem map. Odśwież stronę.', 'error');
-    }
+// Resize maps on window resize
+window.addEventListener('resize', () => {
+  Object.values(maps).forEach(map => {
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+  });
+  
+  resizeCanvas();
 });
 
-// Notification system
-function showNotification(message, type = 'info', duration = 5000) {
-    // Remove existing notification
-    const existing = document.querySelector('.notification');
-    if (existing) {
-        existing.remove();
-    }
-    
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-        <div class="notification-content">
-            <span class="notification-message">${message}</span>
-            <button class="notification-close">&times;</button>
-        </div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Auto remove
-    setTimeout(() => {
-        if (document.body.contains(notification)) {
-            notification.style.animation = 'slideOut 0.3s ease-out';
-            setTimeout(() => {
-                if (document.body.contains(notification)) {
-                    document.body.removeChild(notification);
-                }
-            }, 300);
-        }
-    }, duration);
-    
-    // Manual close
-    const closeBtn = notification.querySelector('.notification-close');
-    closeBtn.addEventListener('click', () => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => {
-            if (document.body.contains(notification)) {
-                document.body.removeChild(notification);
-            }
-        }, 300);
-    });
-}
+// Intersection Observer for animations
+const observerOptions = {
+  threshold: 0.1,
+  rootMargin: '0px 0px -50px 0px'
+};
 
-// Performance monitoring
-function logPerformance(operation, startTime) {
-    const endTime = performance.now();
-    const duration = endTime - startTime;
-    console.log(`⏱️ ${operation} wykonane w ${duration.toFixed(2)}ms`);
-    
-    if (duration > 1000) {
-        console.warn(`⚠️ Wolna operacja: ${operation} (${duration.toFixed(2)}ms)`);
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.style.opacity = '1';
+      entry.target.style.transform = 'translateY(0)';
+    }
+  });
+}, observerOptions);
+
+// Observe all sections for scroll animations
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.section').forEach(section => {
+    section.style.opacity = '0';
+    section.style.transform = 'translateY(30px)';
+    section.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+    observer.observe(section);
+  });
+});
+
+// === OBSŁUGA PRZEŁĄCZANIA MIĘDZY WIZUALIZACJAMI ===
+
+// Funkcja przełączania na zaawansowaną wizualizację
+function switchToAdvancedVisualization() {
+    if (windSimulationData) {
+        addAdvancedWindCSS();
+        initAdvancedWindVisualization();
+    } else {
+        console.warn('Dane symulacji nie są załadowane');
     }
 }
 
-// Data loading helpers
-async function fetchWithRetry(url, maxRetries = 3, delay = 1000) {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response;
-        } catch (error) {
-            console.warn(`❌ Próba ${attempt}/${maxRetries} nieudana dla ${url}: ${error.message}`);
-            
-            if (attempt === maxRetries) {
-                throw error;
-            }
-            
-            // Exponential backoff
-            await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, attempt - 1)));
-        }
-    }
-}
-
-// Responsive helper
-function isMobileDevice() {
-    return window.innerWidth <= 768 || 
-           /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
-
-// Initialize responsive behavior
-function initResponsive() {
-    const handleResize = debounce(() => {
-        // Resize maps
-        Object.values(maps).forEach(map => {
-            if (map && map.invalidateSize) {
-                map.invalidateSize();
+// Funkcja przełączania na podstawową wizualizację
+function switchToBasicVisualization() {
+    // Usuń zaawansowane warstwy
+    if (window.advancedLayers) {
+        window.advancedLayers.forEach(layer => {
+            if (maps.wind.hasLayer(layer)) {
+                maps.wind.removeLayer(layer);
             }
         });
-        
-        // Update particle canvas
-        const particleCanvas = document.querySelector('.particles-canvas');
-        if (particleCanvas) {
-            particleCanvas.width = window.innerWidth;
-            particleCanvas.height = window.innerHeight;
-        }
-        
-        // Adjust mobile navigation
-        const navMenu = document.getElementById('nav-menu');
-        if (navMenu && window.innerWidth > 768) {
-            navMenu.classList.remove('active');
-        }
-    }, 250);
-    
-    window.addEventListener('resize', handleResize);
-}
-
-// Initialize responsive behavior on load
-document.addEventListener('DOMContentLoaded', () => {
-    initResponsive();
-});
-
-// Cleanup function for page unload
-window.addEventListener('beforeunload', () => {
-    // Clear intervals
-    if (animationInterval) {
-        clearInterval(animationInterval);
     }
-    
-    // Remove event listeners
-    particles = [];
-    
-    console.log('🧹 Wyczyszczono zasoby aplikacji');
-});
 
-// Export functions for external access (if needed)
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        initMaps,
-        updateFloodVisualization,
-        updateWindVisualization,
-        updateThermalVisualization,
-        showNotification,
-        loadWindSimulationData
-    };
+    // Usuń kontrolki
+    if (window.advancedLayerControl) {
+        maps.wind.removeControl(window.advancedLayerControl);
+        window.advancedLayerControl = null;
+    }
+
+    if (window.advancedInfoPanel) {
+        maps.wind.removeControl(window.advancedInfoPanel);
+        window.advancedInfoPanel = null;
+    }
+
+    // Przywróć podstawową wizualizację
+    updateWindVisualization();
 }
 
-// Development helpers (only in development)
-if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    window.debugApp = {
-        maps,
-        windSimulationData,
-        particles,
-        showAllLayers: () => {
-            Object.values(maps).forEach(map => {
-                if (map && map.eachLayer) {
-                    map.eachLayer(layer => console.log(layer));
-                }
-            });
-        },
-        reloadWindData: loadWindSimulationData,
-        testNotification: () => showNotification('Test notification', 'success')
-    };
-    
-    console.log('🔧 Debug tools available: window.debugApp');
-}
+// Globalne funkcje dostępne w konsoli
+window.switchToAdvancedVisualization = switchToAdvancedVisualization;
+window.switchToBasicVisualization = switchToBasicVisualization;
 
-console.log('🎉 Aplikacja GIS Microclimate Platform załadowana pomyślnie!');
+console.log('Integracja wizualizacji wiatru ukończona');
+console.log('Dostępne funkcje:');
+console.log('  - switchToAdvancedVisualization() - przełącz na zaawansowaną wizualizację');
+console.log('  - switchToBasicVisualization() - przełącz na podstawową wizualizację');
