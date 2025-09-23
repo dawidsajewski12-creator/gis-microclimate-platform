@@ -1,10 +1,10 @@
 // Sample data from provided JSON
-// === PODSTAWOWE FUNKCJE ŁADOWANIA DANYCH ===
+// === PODSTAWOWE FUNKCJE ŁADOWANIA DANYCH ===api/data/wind_simulation
 let windSimulationData = null;
 
 async function loadWindSimulationData() {
     try {
-        const response = await fetch('data/wind_simulation_results.json');
+        const response = await fetch('api/data/wind_simulation/current.json');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
