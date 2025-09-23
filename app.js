@@ -3,50 +3,49 @@
 let windSimulationData = null;
 
 async function loadWindSimulationData() {
-    try {
-        const response = await fetch('data/wind_simulation_results.json');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        windSimulationData = await response.json();
-        console.log('Dane symulacji wiatru załadowane:', windSimulationData.metadata);
-        
-        // NOWE: Walidacja danych
-        if (!windSimulationData.spatial_reference) {
-            console.warn('Brak informacji spatial_reference w danych!');
-        } else {
-            console.log('CRS danych:', windSimulationData.spatial_reference.crs);
-            console.log('Bounds WGS84:', windSimulationData.spatial_reference.bounds_wgs84);
-        }
-        
-        // Sprawdź czy vector_field ma współrzędne geograficzne
-        if (windSimulationData.vector_field && windSimulationData.vector_field.length > 0) {
-            const firstPoint = windSimulationData.vector_field[0];
-            if (firstPoint.longitude !== undefined && firstPoint.latitude !== undefined) {
-                console.log('✅ Dane zawierają współrzędne geograficzne');
-                console.log('Przykładowy punkt:', {
-                    pixel: `(${firstPoint.pixel_x}, ${firstPoint.pixel_y})`,
-                    geo: `(${firstPoint.longitude.toFixed(6)}, ${firstPoint.latitude.toFixed(6)})`
-                });
-            } else {
-                console.error('❌ Dane NIE zawierają współrzędnych geograficznych!');
+    const urls = [
+        'https://dawidsajewski12-creator.github.io/gis-microclimate-platform/api/data/wind_simulation/current.json',
+        'api/data/wind_simulation/current.json',
+        'data/wind_simulation_results.json'
+    ];
+    
+    for (const url of urls) {
+        try {
+            console.log(`🔄 Próbuję załadować dane z: ${url}`);
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
             }
+            
+            windSimulationData = await response.json();
+            console.log('✅ Dane symulacji wiatru załadowane:', windSimulationData.metadata);
+            
+            // Walidacja danych
+            if (!windSimulationData.spatial_reference) {
+                console.warn('⚠️ Brak informacji spatial_reference w danych!');
+            } else {
+                console.log('📍 CRS danych:', windSimulationData.spatial_reference.crs);
+                console.log('🌍 Bounds WGS84:', windSimulationData.spatial_reference.bounds_wgs84);
+            }
+            
+            // Po załadowaniu danych, inicjalizuj zaawansowaną wizualizację
+            if (maps.wind) {
+                addAdvancedWindCSS();
+                initAdvancedWindVisualization();
+            }
+            
+            return windSimulationData;
+            
+        } catch (error) {
+            console.warn(`❌ Nie udało się załadować z ${url}: ${error.message}`);
+            continue;
         }
-        
-        // Po załadowaniu danych, dodaj CSS i zainicjalizuj zaawansowaną wizualizację
-        if (maps.wind) {
-            addAdvancedWindCSS();
-            initAdvancedWindVisualization();
-        }
-        
-        return windSimulationData;
-        
-    } catch (error) {
-        console.error('Błąd podczas ładowania danych symulacji wiatru:', error);
-        return null;
     }
+    
+    console.error('💥 Nie udało się załadować danych z żadnego źródła');
+    return null;
 }
+
 
 
 // === ZAAWANSOWANA WIZUALIZACJA WIATRU - INTEGRACJA Z DZIAŁAJĄCYM KODEM ===
@@ -398,6 +397,32 @@ function initAdvancedWindVisualization() {
     }
 
     // Utwórz nowe zaawansowane warstwy
+    // Dodaj warstwę budynków
+    let buildingsLayer = null;
+    try {
+        const buildingsResponse = await fetch('https://dawidsajewski12-creator.github.io/gis-microclimate-platform/api/data/wind_simulation/buildings.geojson');
+        if (buildingsResponse.ok) {
+            const buildingsData = await buildingsResponse.json();
+            buildingsLayer = L.geoJSON(buildingsData, {
+                style: {
+                    color: '#8B4513',
+                    weight: 2,
+                    opacity: 0.8,
+                    fillColor: '#8B4513',
+                    fillOpacity: 0.3
+                },
+                onEachFeature: function(feature, layer) {
+                    if (feature.properties) {
+                        layer.bindPopup(`<b>Budynek</b><br>Właściwości: ${JSON.stringify(feature.properties)}`);
+                    }
+                }
+            });
+            buildingsLayer.addTo(maps.wind);
+            console.log('🏢 Dodano warstwę budynków');
+        }
+    } catch (error) {
+        console.warn('⚠️ Nie udało się załadować budynków:', error);
+    }
     const velocityLayer = new AdvancedVelocityLayer(adaptedData, adaptedData.bounds);
     const windAnimLayer = new AdvancedWindAnimationLayer(adaptedData, adaptedData.bounds);
     const legend = new AdvancedLegendControl();
@@ -414,9 +439,10 @@ function initAdvancedWindVisualization() {
     // Dodaj kontrolki warstw
     if (!window.advancedLayerControl) {
         const overlayMaps = {
-            "Pola prędkości": velocityLayer,
-            "Przepływ wiatru": windAnimLayer
-        };
+            'Pola prędkości': velocityLayer,
+            'Przepływ wiatru': windAnimLayer,
+            ...(buildingsLayer && {'Budynki': buildingsLayer})
+};
 
         window.advancedLayerControl = L.control.layers(null, overlayMaps, { 
             collapsed: false,
