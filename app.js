@@ -1,5 +1,10 @@
 // Sample data from provided JSON
 // === PODSTAWOWE FUNKCJE ŁADOWANIA DANYCH ===
+// Globalne zmienne - MUSI BYĆ NA POCZĄTKU!
+let windSimulationData = null;
+let maps = {};
+
+
 // Funkcja mapowania kolorów Viridis (tak jak w Python branca.colormap)
 function getViridisColor(value, minVal, maxVal) {
     if (minVal === maxVal) {
@@ -34,11 +39,11 @@ function getViridisColor(value, minVal, maxVal) {
     
     return `rgba(${r}, ${g}, ${b}, 0.8)`;
 }
-```
+
 
 ### 2. Poprawiona funkcja ładowania danych
 
-```javascript
+
 // === POPRAWIONA FUNKCJA ŁADOWANIA DANYCH WIATROWYCH ===
 async function loadWindSimulationData() {
     try {
@@ -141,11 +146,11 @@ async function loadWindSimulationData() {
         return windSimulationData;
     }
 }
-```
+
 
 ### 3. Funkcja wizualizacji zgodna z kodem Python
 
-```javascript
+
 // === FUNKCJA WIZUALIZACJI ZGODNA Z KODEM PYTHON ===
 function createWindVisualizationLayer(map, data) {
     console.log('Tworzenie warstwy wizualizacji wiatru...');
