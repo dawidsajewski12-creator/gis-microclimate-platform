@@ -198,7 +198,7 @@ async function loadDataFromFile() {
     const possiblePaths = [
         './current-1.json',
         './data/current-1.json',
-        './api/data/wind_simulation/current-1.json'
+        './api/data/wind_simulation/current.json'
     ];
     
     for (const path of possiblePaths) {
