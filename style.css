@@ -1840,3 +1840,35 @@ textarea.form-control {
 .leaflet-popup-tip {
   background: var(--color-surface-elevated) !important;
 }
+
+
+.animation-controls {
+    margin: 10px 0;
+    padding: 10px;
+    background: rgba(0,0,0,0.1);
+    border-radius: 4px;
+}
+
+.parameter-controls label {
+    display: block;
+    margin: 5px 0;
+    cursor: pointer;
+}
+
+.velocity-field-canvas {
+    mix-blend-mode: multiply;
+}
+
+.wind-particles-canvas {
+    mix-blend-mode: screen;
+}
+
+.wind-legend-control {
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px;
+    border-radius: 4px;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+}
+
