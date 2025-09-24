@@ -248,30 +248,28 @@ const AdvancedVelocityLayer = L.Layer.extend({
     },
 
     _draw: function() {
-        if (!this._data.magnitudeGrid) return;
-
+        if (!this._data.vectorField) return;
+    
         const ctx = this._ctx;
         ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
-
-        const grid = this._data.magnitudeGrid;
-        const w = this._data.gridWidth;
-        const h = this._data.gridHeight;
-        const { minMagnitude, maxMagnitude } = this._data;
-
-        const cellWidth = (this._data.bounds.getEast() - this._data.bounds.getWest()) / w;
-        const cellHeight = (this._data.bounds.getNorth() - this._data.bounds.getSouth()) / h;
-
-        for (let j = 0; j < h; j++) {
-            for (let i = 0; i < w; i++) {
-                const lat = this._data.bounds.getNorth() - ((j + 0.5) * cellHeight);
-                const lon = this._data.bounds.getWest() + ((i + 0.5) * cellWidth);
-                const point = this._map.latLngToContainerPoint([lat, lon]);
-
-                const value = grid[j] && grid[j][i] !== undefined ? grid[j][i] : NaN;
-                if (!isFinite(value)) continue;
-
-                ctx.fillStyle = getViridisColor(value, minMagnitude, maxMagnitude);
-                ctx.fillRect(Math.round(point.x - 2), Math.round(point.y - 2), 4, 4);
+    
+        const { minMagnitude, maxMagnitude, vectorField } = this._data;
+    
+        // POPRAWKA: Użyj rzeczywistych współrzędnych zamiast interpolacji
+        vectorField.forEach(vector => {
+            // Użyj prawdziwych współrzędnych z danych
+            const point = this._map.latLngToContainerPoint([vector.lat, vector.lng]);
+            
+            // Sprawdź czy punkt jest w widocznym obszarze
+            if (point.x < 0 || point.x > this._canvas.width || 
+                point.y < 0 || point.y > this._canvas.height) {
+                return; // Pomiń punkty poza ekranem
+            }
+    
+            const magnitude = vector.speed || Math.sqrt(vector.vx*vector.vx + vector.vy*vector.vy);
+            
+            ctx.fillStyle = getViridisColor(magnitude, minMagnitude, maxMagnitude);
+            ctx.fillRect(Math.round(point.x - 2), Math.round(point.y - 2), 4, 4);
             }
         }
     }
