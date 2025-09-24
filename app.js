@@ -260,7 +260,7 @@ function validateAndTransformWindData(rawData) {
 function createMagnitudeGrid(vectorField, bounds) {
     if (!bounds) return [];
     
-    const gridSize = 20; // 20x20 siatka
+    const gridSize = 5; // 20x20 siatka
     const latStep = (bounds.north - bounds.south) / gridSize;
     const lngStep = (bounds.east - bounds.west) / gridSize;
     
