@@ -263,8 +263,8 @@ const AdvancedVelocityLayer = L.Layer.extend({
     
             for (let j = 0; j < h; j++) {
                 for (let i = 0; i < w; i++) {
-                    const lat = this._data.bounds.getNorth() - ((j + 0.0) * cellHeight);
-                    const lon = this._data.bounds.getWest() + ((i + 0.0) * cellWidth);
+                    const lat = this._data.bounds.getNorth();
+                    const lon = this._data.bounds.getWest();
                     const point = this._map.latLngToContainerPoint([lat, lon]);
     
                     const value = grid[j] && grid[j][i] !== undefined ? grid[j][i] : NaN;
