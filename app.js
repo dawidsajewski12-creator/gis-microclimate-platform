@@ -298,7 +298,7 @@ function createMagnitudeGrid(vectorField, bounds) {
 
 // Parametry konfiguracyjne wizualizacji
 const WIND_VIZ_CONFIG = {
-    PARTICLE_COUNT: 6000,
+    PARTICLE_COUNT: 20000,
     PARTICLE_SPEED_SCALE: 0.2,
     PARTICLE_LIFESPAN: 1000,
     PARTICLE_LINE_WIDTH: 1.6,
