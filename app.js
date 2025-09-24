@@ -21,12 +21,7 @@ const fallbackWindData = {
             "west": 21.0100
         }
     },
-    "magnitude_grid": Array(20).fill().map(() => Array(20).fill().map(() => Math.random() * 8 + 1)),
-    "flow_statistics": {
-        "min_magnitude": 0.5,
-        "max_magnitude": 8.5,
-        "mean_magnitude": 4.2
-    },
+    // POPRAWIONA struktura - vector_field z magnitude (nie speed)
     "vector_field": Array(100).fill().map((_, i) => ({
         "pixel_x": (i % 10) * 10,
         "pixel_y": Math.floor(i / 10) * 10,
@@ -34,15 +29,20 @@ const fallbackWindData = {
         "latitude": 52.2280 + Math.floor(i / 10) * 0.0004,
         "vx": (Math.random() - 0.5) * 4,
         "vy": (Math.random() - 0.5) * 4,
-        "speed": Math.random() * 6 + 2
+        "magnitude": Math.random() * 6 + 2  // ZMIANA: magnitude zamiast speed
     })),
+    "flow_statistics": {
+        "min_magnitude": 0.5,
+        "max_magnitude": 8.5,
+        "mean_magnitude": 4.2
+    },
     "streamlines": Array(5).fill().map(() => 
         Array(20).fill().map((_, i) => ({
             "longitude": 21.0100 + Math.random() * 0.005,
             "latitude": 52.2280 + Math.random() * 0.004,
             "vx": Math.random() * 2 - 1,
             "vy": Math.random() * 2 - 1,
-            "speed": Math.random() * 5 + 1
+            "magnitude": Math.random() * 5 + 1  // ZMIANA: magnitude zamiast speed
         }))
     ),
     "particles": Array(3).fill().map(() => 
@@ -51,7 +51,7 @@ const fallbackWindData = {
             "latitude": 52.2280 + Math.random() * 0.004,
             "vx": (Math.random() - 0.5) * 3,
             "vy": (Math.random() - 0.5) * 3,
-            "speed": Math.random() * 4 + 1
+            "magnitude": Math.random() * 4 + 1  // ZMIANA: magnitude zamiast speed
         }))
     ),
     "performance": {
@@ -63,17 +63,47 @@ const fallbackWindData = {
 async function loadWindSimulationData() {
     try {
         console.log('Próba ładowania danych symulacji wiatru...');
-        const response = await fetch('api/data/wind_simulation/current.json');
         
-        if (!response.ok) {
-            console.warn(`Nie można załadować pliku danych (status: ${response.status}), używam danych fallback`);
-            windSimulationData = fallbackWindData;
-        } else {
-            windSimulationData = await response.json();
-            console.log('✅ Dane symulacji wiatru załadowane z pliku:', windSimulationData.metadata);
+        // POPRAWIONA ścieżka - spróbuj różnych możliwych lokalizacji
+        const possiblePaths = [
+            'wind_simulation_results.json',           // bezpośrednio w folderze
+            'api/data/wind_simulation_results.json',  // w api
+            'data/wind_simulation_results.json',      // w data
+            'current.json',                           // obecna nazwa
+            'api/data/wind_simulation/current.json'   // obecna ścieżka
+        ];
+        
+        let response = null;
+        let successfulPath = null;
+        
+        // Spróbuj każdej ścieżki po kolei
+        for (const path of possiblePaths) {
+            try {
+                console.log(`Próbuję ścieżkę: ${path}`);
+                response = await fetch(path);
+                if (response.ok) {
+                    successfulPath = path;
+                    console.log(`✅ Znaleziono plik pod ścieżką: ${path}`);
+                    break;
+                }
+            } catch (error) {
+                console.log(`Ścieżka ${path} niedostępna:`, error.message);
+            }
         }
         
-        // NOWE: Walidacja danych
+        if (!response || !response.ok) {
+            console.warn(`Nie można załadować pliku danych z żadnej ścieżki, używam danych fallback`);
+            windSimulationData = fallbackWindData;
+        } else {
+            const rawData = await response.json();
+            console.log('✅ Surowe dane załadowane z:', successfulPath);
+            console.log('Struktura danych:', Object.keys(rawData));
+            
+            // WALIDACJA i transformacja danych
+            windSimulationData = validateAndTransformWindData(rawData);
+        }
+        
+        // Walidacja końcowa
         if (!windSimulationData.spatial_reference) {
             console.warn('Brak informacji spatial_reference w danych!');
         } else {
@@ -81,21 +111,24 @@ async function loadWindSimulationData() {
             console.log('Bounds WGS84:', windSimulationData.spatial_reference.bounds_wgs84);
         }
         
-        // Sprawdź czy vector_field ma współrzędne geograficzne
+        // Sprawdź czy vector_field ma poprawną strukturę
         if (windSimulationData.vector_field && windSimulationData.vector_field.length > 0) {
             const firstPoint = windSimulationData.vector_field[0];
+            console.log('Struktura pierwszego punktu:', Object.keys(firstPoint));
+            
             if (firstPoint.longitude !== undefined && firstPoint.latitude !== undefined) {
                 console.log('✅ Dane zawierają współrzędne geograficzne');
                 console.log('Przykładowy punkt:', {
-                    pixel: `(${firstPoint.pixel_x}, ${firstPoint.pixel_y})`,
-                    geo: `(${firstPoint.longitude.toFixed(6)}, ${firstPoint.latitude.toFixed(6)})`
+                    pixel: firstPoint.pixel_x !== undefined ? `(${firstPoint.pixel_x}, ${firstPoint.pixel_y})` : 'brak',
+                    geo: `(${firstPoint.longitude.toFixed(6)}, ${firstPoint.latitude.toFixed(6)})`,
+                    magnitude: firstPoint.magnitude || firstPoint.speed || 'brak'
                 });
             } else {
                 console.error('❌ Dane NIE zawierają współrzędnych geograficznych!');
             }
         }
         
-        // Po załadowaniu danych, dodaj CSS i zainicjalizuj zaawansowaną wizualizację
+        // Po załadowaniu danych, zainicjalizuj wizualizację
         if (maps.wind) {
             addAdvancedWindCSS();
             initAdvancedWindVisualization();
@@ -117,6 +150,153 @@ async function loadWindSimulationData() {
         return windSimulationData;
     }
 }
+function validateAndTransformWindData(rawData) {
+    console.log('Walidacja i transformacja danych...');
+    
+    const transformed = {
+        metadata: rawData.metadata || {
+            title: "Imported wind simulation data",
+            timestamp: new Date().toISOString()
+        },
+        spatial_reference: rawData.spatial_reference || {
+            crs: "EPSG:4326"
+        },
+        vector_field: [],
+        flow_statistics: {
+            min_magnitude: Infinity,
+            max_magnitude: -Infinity,
+            mean_magnitude: 0
+        },
+        streamlines: rawData.streamlines || [],
+        particles: rawData.particles || [],
+        performance: rawData.performance || {}
+    };
+    
+    // Sprawdź czy mamy vector_field
+    if (rawData.vector_field && Array.isArray(rawData.vector_field)) {
+        console.log(`Przetwarzanie ${rawData.vector_field.length} wektorów...`);
+        
+        let magnitudeSum = 0;
+        let validVectors = 0;
+        
+        rawData.vector_field.forEach((vector, index) => {
+            // Sprawdź czy wektor ma wymagane pola
+            if (vector.longitude === undefined || vector.latitude === undefined) {
+                console.warn(`Wektor ${index} nie ma współrzędnych geograficznych`);
+                return;
+            }
+            
+            // Oblicz magnitude jeśli brakuje
+            let magnitude = vector.magnitude;
+            if (magnitude === undefined && vector.vx !== undefined && vector.vy !== undefined) {
+                magnitude = Math.sqrt(vector.vx * vector.vx + vector.vy * vector.vy);
+                console.log(`Obliczono magnitude dla wektora ${index}: ${magnitude}`);
+            }
+            
+            // Użyj speed jako fallback dla magnitude
+            if (magnitude === undefined && vector.speed !== undefined) {
+                magnitude = vector.speed;
+            }
+            
+            if (magnitude !== undefined && !isNaN(magnitude)) {
+                const transformedVector = {
+                    pixel_x: vector.pixel_x,
+                    pixel_y: vector.pixel_y,
+                    longitude: vector.longitude,
+                    latitude: vector.latitude,
+                    vx: vector.vx || 0,
+                    vy: vector.vy || 0,
+                    magnitude: magnitude
+                };
+                
+                transformed.vector_field.push(transformedVector);
+                
+                // Aktualizuj statystyki
+                transformed.flow_statistics.min_magnitude = Math.min(transformed.flow_statistics.min_magnitude, magnitude);
+                transformed.flow_statistics.max_magnitude = Math.max(transformed.flow_statistics.max_magnitude, magnitude);
+                magnitudeSum += magnitude;
+                validVectors++;
+            }
+        });
+        
+        if (validVectors > 0) {
+            transformed.flow_statistics.mean_magnitude = magnitudeSum / validVectors;
+            console.log(`✅ Przetworzone ${validVectors} wektorów`);
+            console.log('Statystyki magnitude:', {
+                min: transformed.flow_statistics.min_magnitude.toFixed(2),
+                max: transformed.flow_statistics.max_magnitude.toFixed(2),
+                mean: transformed.flow_statistics.mean_magnitude.toFixed(2)
+            });
+        } else {
+            console.error('❌ Brak prawidłowych wektorów w danych!');
+            return fallbackWindData;
+        }
+    } else {
+        console.error('❌ Brak vector_field w danych!');
+        return fallbackWindData;
+    }
+    
+    // Sprawdź i ustaw bounds jeśli nie ma
+    if (!transformed.spatial_reference.bounds_wgs84 && transformed.vector_field.length > 0) {
+        console.log('Obliczanie bounds na podstawie vector_field...');
+        const lats = transformed.vector_field.map(v => v.latitude);
+        const lngs = transformed.vector_field.map(v => v.longitude);
+        
+        transformed.spatial_reference.bounds_wgs84 = {
+            north: Math.max(...lats),
+            south: Math.min(...lats),
+            east: Math.max(...lngs),
+            west: Math.min(...lngs)
+        };
+        
+        console.log('Obliczone bounds:', transformed.spatial_reference.bounds_wgs84);
+    }
+    
+    // Twórz magnitude_grid na podstawie vector_field (dla kompatybilności)
+    if (transformed.vector_field.length > 0) {
+        transformed.magnitude_grid = createMagnitudeGrid(transformed.vector_field, transformed.spatial_reference.bounds_wgs84);
+    }
+    
+    return transformed;
+}
+
+// Pomocnicza funkcja do tworzenia siatki magnitude
+function createMagnitudeGrid(vectorField, bounds) {
+    if (!bounds) return [];
+    
+    const gridSize = 20; // 20x20 siatka
+    const latStep = (bounds.north - bounds.south) / gridSize;
+    const lngStep = (bounds.east - bounds.west) / gridSize;
+    
+    const grid = Array(gridSize).fill().map(() => Array(gridSize).fill(0));
+    
+    for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+            const cellLat = bounds.south + (i + 0.5) * latStep;
+            const cellLng = bounds.west + (j + 0.5) * lngStep;
+            
+            // Znajdź najbliższy wektor
+            let minDist = Infinity;
+            let closestMagnitude = 0;
+            
+            vectorField.forEach(vector => {
+                const dist = Math.sqrt(
+                    Math.pow(vector.latitude - cellLat, 2) + 
+                    Math.pow(vector.longitude - cellLng, 2)
+                );
+                if (dist < minDist) {
+                    minDist = dist;
+                    closestMagnitude = vector.magnitude;
+                }
+            });
+            
+            grid[i][j] = closestMagnitude;
+        }
+    }
+    
+    return grid;
+}
+
 
 // === ZAAWANSOWANA WIZUALIZACJA WIATRU - INTEGRACJA Z DZIAŁAJĄCYM KODEM ===
 
@@ -141,10 +321,14 @@ function getViridisColor(value, min, max) {
 }
 
 // Adapter danych - przekształca nasze dane na format oczekiwany przez wizualizację
+// NAPRAWIONY adapter danych
 function createWindDataAdapter(rawWindData) {
-    if (!rawWindData) return null;
+    if (!rawWindData) {
+        console.error('Brak danych wiatru!');
+        return null;
+    }
     
-    // NOWE: Sprawdź czy dane zawierają współrzędne geograficzne
+    // Sprawdź czy dane zawierają współrzędne geograficzne
     const hasGeoCoords = rawWindData.vector_field && rawWindData.vector_field.length > 0 
         && rawWindData.vector_field[0].longitude !== undefined;
     
@@ -153,7 +337,7 @@ function createWindDataAdapter(rawWindData) {
         return null;
     }
     
-    // NOWE: Użyj prawdziwych bounds z danych zamiast hardkodowania
+    // Użyj prawdziwych bounds z danych
     const bounds_wgs84 = rawWindData.spatial_reference?.bounds_wgs84;
     if (!bounds_wgs84) {
         console.error('Brak informacji o bounds_wgs84 w danych symulacji!');
@@ -161,52 +345,60 @@ function createWindDataAdapter(rawWindData) {
     }
     
     const bounds = L.latLngBounds(
-        [bounds_wgs84.south, bounds_wgs84.west], // SW corner
-        [bounds_wgs84.north, bounds_wgs84.east]  // NE corner
+        [bounds_wgs84.south, bounds_wgs84.west],
+        [bounds_wgs84.north, bounds_wgs84.east]
     );
     
     console.log('Używam prawdziwych bounds z danych:', bounds);
     
     const adapter = {
-        // Format danych zgodny z oczekiwaniami wizualizacji
-        magnitudeGrid: rawWindData.magnitude_grid,
-        gridWidth: rawWindData.magnitude_grid[0].length,
-        gridHeight: rawWindData.magnitude_grid.length,
-        bounds: bounds, // NOWE: prawdziwe bounds
+        // NAPRAWIONA struktura danych
+        magnitudeGrid: rawWindData.magnitude_grid || [],
+        gridWidth: rawWindData.magnitude_grid ? rawWindData.magnitude_grid[0].length : 0,
+        gridHeight: rawWindData.magnitude_grid ? rawWindData.magnitude_grid.length : 0,
+        bounds: bounds,
         minMagnitude: rawWindData.flow_statistics.min_magnitude,
         maxMagnitude: rawWindData.flow_statistics.max_magnitude,
         
-        // NOWE: Użyj prawdziwych współrzędnych geograficznych
+        // NAPRAWIONE mapowanie - użyj magnitude zamiast speed
         streamlines: rawWindData.streamlines.map(streamline => 
             streamline.map(point => ({
                 ...point,
-                lat: point.latitude,  // NOWE: użyj prawdziwych współrzędnych
-                lng: point.longitude
+                lat: point.latitude,
+                lng: point.longitude,
+                speed: point.magnitude || point.speed || 0
             }))
         ),
         
-        // NOWE: Użyj prawdziwych współrzędnych dla particles
         particles: rawWindData.particles.length > 0 
             ? rawWindData.particles.flatMap(path => 
                 path.map(particle => ({
                     ...particle,
                     lat: particle.latitude,
-                    lng: particle.longitude
+                    lng: particle.longitude,
+                    speed: particle.magnitude || particle.speed || 0
                 }))
             ) : [],
         
-        // NOWE: Użyj prawdziwych współrzędnych dla vector field
         vectorField: rawWindData.vector_field.map(vector => ({
             ...vector,
-            lat: vector.latitude,  // NOWE: użyj prawdziwych współrzędnych
-            lng: vector.longitude
+            lat: vector.latitude,
+            lng: vector.longitude,
+            speed: vector.magnitude || vector.speed || 0
         })),
         
-        // Metadane
         metadata: rawWindData.metadata,
         performance: rawWindData.performance,
-        spatial_reference: rawWindData.spatial_reference // NOWE: dodaj info o CRS
+        spatial_reference: rawWindData.spatial_reference
     };
+    
+    console.log('Adapter utworzony:', {
+        vectorsCount: adapter.vectorField.length,
+        particlesCount: adapter.particles.length,
+        streamlinesCount: adapter.streamlines.length,
+        gridSize: `${adapter.gridWidth}x${adapter.gridHeight}`,
+        magnitudeRange: `${adapter.minMagnitude.toFixed(2)} - ${adapter.maxMagnitude.toFixed(2)}`
+    });
     
     return adapter;
 }
