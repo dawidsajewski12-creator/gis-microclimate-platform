@@ -1,11 +1,11 @@
 // Sample data from provided JSON
-// === PODSTAWOWE FUNKCJE ĹADOWANIA DANYCH ===
+// === PODSTAWOWE FUNKCJE ŁADOWANIA DANYCH ===
 let windSimulationData = null;
 
-// PrzykĹadowe dane fallback
+// Przykładowe dane fallback
 const fallbackWindData = {
     "metadata": {
-        "title": "Symulacja przepĹywu powietrza - przykĹadowe dane",
+        "title": "Symulacja przepływu powietrza - przykładowe dane",
         "description": "Fallback dane dla demonstracji",
         "timestamp": "2024-09-23T12:00:00Z",
         "grid_resolution": "1m",
@@ -62,44 +62,44 @@ const fallbackWindData = {
 
 async function loadWindSimulationData() {
     try {
-        console.log('PrĂłba Ĺadowania danych symulacji wiatru...');
+        console.log('Próba ładowania danych symulacji wiatru...');
         
-        // POPRAWIONA ĹcieĹźka - sprĂłbuj rĂłĹźnych moĹźliwych lokalizacji
+        // POPRAWIONA ścieżka - spróbuj różnych możliwych lokalizacji
         const possiblePaths = [
-            'api/data/wind_simulation/current.json'   // obecna ĹcieĹźka
+            'api/data/wind_simulation/current.json'   // obecna ścieżka
         ];
         
         let response = null;
         let successfulPath = null;
         
-        // SprĂłbuj kaĹźdej ĹcieĹźki po kolei
+        // Spróbuj każdej ścieżki po kolei
         for (const path of possiblePaths) {
             try {
-                console.log(`PrĂłbujÄ ĹcieĹźkÄ: ${path}`);
+                console.log(`Próbuję ścieżkę: ${path}`);
                 response = await fetch(path);
                 if (response.ok) {
                     successfulPath = path;
-                    console.log(`â Znaleziono plik pod ĹcieĹźkÄ: ${path}`);
+                    console.log(`✅ Znaleziono plik pod ścieżką: ${path}`);
                     break;
                 }
             } catch (error) {
-                console.log(`ĹcieĹźka ${path} niedostÄpna:`, error.message);
+                console.log(`Ścieżka ${path} niedostępna:`, error.message);
             }
         }
         
         if (!response || !response.ok) {
-            console.warn(`Nie moĹźna zaĹadowaÄ pliku danych z Ĺźadnej ĹcieĹźki, uĹźywam danych fallback`);
+            console.warn(`Nie można załadować pliku danych z żadnej ścieżki, używam danych fallback`);
             windSimulationData = fallbackWindData;
         } else {
             const rawData = await response.json();
-            console.log('â Surowe dane zaĹadowane z:', successfulPath);
+            console.log('✅ Surowe dane załadowane z:', successfulPath);
             console.log('Struktura danych:', Object.keys(rawData));
             
             // WALIDACJA i transformacja danych
             windSimulationData = validateAndTransformWindData(rawData);
         }
         
-        // Walidacja koĹcowa
+        // Walidacja końcowa
         if (!windSimulationData.spatial_reference) {
             console.warn('Brak informacji spatial_reference w danych!');
         } else {
@@ -107,24 +107,24 @@ async function loadWindSimulationData() {
             console.log('Bounds WGS84:', windSimulationData.spatial_reference.bounds_wgs84);
         }
         
-        // SprawdĹş czy vector_field ma poprawnÄ strukturÄ
+        // Sprawdź czy vector_field ma poprawną strukturę
         if (windSimulationData.vector_field && windSimulationData.vector_field.length > 0) {
             const firstPoint = windSimulationData.vector_field[0];
             console.log('Struktura pierwszego punktu:', Object.keys(firstPoint));
             
             if (firstPoint.longitude !== undefined && firstPoint.latitude !== undefined) {
-                console.log('â Dane zawierajÄ wspĂłĹrzÄdne geograficzne');
-                console.log('PrzykĹadowy punkt:', {
+                console.log('✅ Dane zawierają współrzędne geograficzne');
+                console.log('Przykładowy punkt:', {
                     pixel: firstPoint.pixel_x !== undefined ? `(${firstPoint.pixel_x}, ${firstPoint.pixel_y})` : 'brak',
                     geo: `(${firstPoint.longitude.toFixed(6)}, ${firstPoint.latitude.toFixed(6)})`,
                     magnitude: firstPoint.magnitude || firstPoint.speed || 'brak'
                 });
             } else {
-                console.error('â Dane NIE zawierajÄ wspĂłĹrzÄdnych geograficznych!');
+                console.error('❌ Dane NIE zawierają współrzędnych geograficznych!');
             }
         }
         
-        // Po zaĹadowaniu danych, zainicjalizuj wizualizacjÄ
+        // Po załadowaniu danych, zainicjalizuj wizualizację
         if (maps.wind) {
             addAdvancedWindCSS();
             initAdvancedWindVisualization();
@@ -133,11 +133,11 @@ async function loadWindSimulationData() {
         return windSimulationData;
         
     } catch (error) {
-        console.error('BĹÄd podczas Ĺadowania danych symulacji wiatru:', error);
-        console.log('UĹźywam danych fallback...');
+        console.error('Błąd podczas ładowania danych symulacji wiatru:', error);
+        console.log('Używam danych fallback...');
         windSimulationData = fallbackWindData;
         
-        // RĂłwnieĹź dla fallback, zainicjalizuj wizualizacjÄ jeĹli mapa istnieje
+        // Również dla fallback, zainicjalizuj wizualizację jeśli mapa istnieje
         if (maps.wind) {
             addAdvancedWindCSS();
             initAdvancedWindVisualization();
@@ -168,28 +168,28 @@ function validateAndTransformWindData(rawData) {
         performance: rawData.performance || {}
     };
     
-    // SprawdĹş czy mamy vector_field
+    // Sprawdź czy mamy vector_field
     if (rawData.vector_field && Array.isArray(rawData.vector_field)) {
-        console.log(`Przetwarzanie ${rawData.vector_field.length} wektorĂłw...`);
+        console.log(`Przetwarzanie ${rawData.vector_field.length} wektorów...`);
         
         let magnitudeSum = 0;
         let validVectors = 0;
         
         rawData.vector_field.forEach((vector, index) => {
-            // SprawdĹş czy wektor ma wymagane pola
+            // Sprawdź czy wektor ma wymagane pola
             if (vector.longitude === undefined || vector.latitude === undefined) {
-                console.warn(`Wektor ${index} nie ma wspĂłĹrzÄdnych geograficznych`);
+                console.warn(`Wektor ${index} nie ma współrzędnych geograficznych`);
                 return;
             }
             
-            // Oblicz magnitude jeĹli brakuje
+            // Oblicz magnitude jeśli brakuje
             let magnitude = vector.magnitude;
             if (magnitude === undefined && vector.vx !== undefined && vector.vy !== undefined) {
                 magnitude = Math.sqrt(vector.vx * vector.vx + vector.vy * vector.vy);
                 console.log(`Obliczono magnitude dla wektora ${index}: ${magnitude}`);
             }
             
-            // UĹźyj speed jako fallback dla magnitude
+            // Użyj speed jako fallback dla magnitude
             if (magnitude === undefined && vector.speed !== undefined) {
                 magnitude = vector.speed;
             }
@@ -217,22 +217,22 @@ function validateAndTransformWindData(rawData) {
         
         if (validVectors > 0) {
             transformed.flow_statistics.mean_magnitude = magnitudeSum / validVectors;
-            console.log(`â Przetworzone ${validVectors} wektorĂłw`);
+            console.log(`✅ Przetworzone ${validVectors} wektorów`);
             console.log('Statystyki magnitude:', {
                 min: transformed.flow_statistics.min_magnitude.toFixed(2),
                 max: transformed.flow_statistics.max_magnitude.toFixed(2),
                 mean: transformed.flow_statistics.mean_magnitude.toFixed(2)
             });
         } else {
-            console.error('â Brak prawidĹowych wektorĂłw w danych!');
+            console.error('❌ Brak prawidłowych wektorów w danych!');
             return fallbackWindData;
         }
     } else {
-        console.error('â Brak vector_field w danych!');
+        console.error('❌ Brak vector_field w danych!');
         return fallbackWindData;
     }
     
-    // SprawdĹş i ustaw bounds jeĹli nie ma
+    // Sprawdź i ustaw bounds jeśli nie ma
     if (!transformed.spatial_reference.bounds_wgs84 && transformed.vector_field.length > 0) {
         console.log('Obliczanie bounds na podstawie vector_field...');
         const lats = transformed.vector_field.map(v => v.latitude);
@@ -248,7 +248,7 @@ function validateAndTransformWindData(rawData) {
         console.log('Obliczone bounds:', transformed.spatial_reference.bounds_wgs84);
     }
     
-    // TwĂłrz magnitude_grid na podstawie vector_field (dla kompatybilnoĹci)
+    // Twórz magnitude_grid na podstawie vector_field (dla kompatybilności)
     if (transformed.vector_field.length > 0) {
         transformed.magnitude_grid = createMagnitudeGrid(transformed.vector_field, transformed.spatial_reference.bounds_wgs84);
     }
@@ -271,7 +271,7 @@ function createMagnitudeGrid(vectorField, bounds) {
             const cellLat = bounds.south + (i + 0.5) * latStep;
             const cellLng = bounds.west + (j + 0.5) * lngStep;
             
-            // ZnajdĹş najbliĹźszy wektor
+            // Znajdź najbliższy wektor
             let minDist = Infinity;
             let closestMagnitude = 0;
             
@@ -294,7 +294,7 @@ function createMagnitudeGrid(vectorField, bounds) {
 }
 
 
-// === ZAAWANSOWANA WIZUALIZACJA WIATRU - INTEGRACJA Z DZIAĹAJÄCYM KODEM ===
+// === ZAAWANSOWANA WIZUALIZACJA WIATRU - INTEGRACJA Z DZIAŁAJĄCYM KODEM ===
 
 // Parametry konfiguracyjne wizualizacji
 const WIND_VIZ_CONFIG = {
@@ -307,7 +307,7 @@ const WIND_VIZ_CONFIG = {
     GLOW_BLUR: 7
 };
 
-// Funkcja mapowania wartoĹci na kolor (skala Viridis)
+// Funkcja mapowania wartości na kolor (skala Viridis)
 function getViridisColor(value, min, max) {
     const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
     const r = Math.round(255 * (0.267004 + 1.15172 * t - 2.92336 * t**2 + 1.52013 * t**3));
@@ -316,7 +316,7 @@ function getViridisColor(value, min, max) {
     return `rgba(${r},${g},${b},0.6)`;
 }
 
-// Adapter danych - przeksztaĹca nasze dane na format oczekiwany przez wizualizacjÄ
+// Adapter danych - przekształca nasze dane na format oczekiwany przez wizualizację
 // NAPRAWIONY adapter danych
 function createWindDataAdapter(rawWindData) {
     if (!rawWindData) {
@@ -324,16 +324,16 @@ function createWindDataAdapter(rawWindData) {
         return null;
     }
     
-    // SprawdĹş czy dane zawierajÄ wspĂłĹrzÄdne geograficzne
+    // Sprawdź czy dane zawierają współrzędne geograficzne
     const hasGeoCoords = rawWindData.vector_field && rawWindData.vector_field.length > 0 
         && rawWindData.vector_field[0].longitude !== undefined;
     
     if (!hasGeoCoords) {
-        console.error('Dane symulacji nie zawierajÄ wspĂłĹrzÄdnych geograficznych!');
+        console.error('Dane symulacji nie zawierają współrzędnych geograficznych!');
         return null;
     }
     
-    // UĹźyj prawdziwych bounds z danych
+    // Użyj prawdziwych bounds z danych
     const bounds_wgs84 = rawWindData.spatial_reference?.bounds_wgs84;
     if (!bounds_wgs84) {
         console.error('Brak informacji o bounds_wgs84 w danych symulacji!');
@@ -345,7 +345,7 @@ function createWindDataAdapter(rawWindData) {
         [bounds_wgs84.north, bounds_wgs84.east]
     );
     
-    console.log('UĹźywam prawdziwych bounds z danych:', bounds);
+    console.log('Używam prawdziwych bounds z danych:', bounds);
     
     const adapter = {
         // NAPRAWIONA struktura danych
@@ -356,7 +356,7 @@ function createWindDataAdapter(rawWindData) {
         minMagnitude: rawWindData.flow_statistics.min_magnitude,
         maxMagnitude: rawWindData.flow_statistics.max_magnitude,
         
-        // NAPRAWIONE mapowanie - uĹźyj magnitude zamiast speed
+        // NAPRAWIONE mapowanie - użyj magnitude zamiast speed
         streamlines: rawWindData.streamlines.map(streamline => 
             streamline.map(point => ({
                 ...point,
@@ -399,7 +399,7 @@ function createWindDataAdapter(rawWindData) {
     return adapter;
 }
 
-// === VelocityLayer - Warstwa pola prÄdkoĹci ===
+// === VelocityLayer - Warstwa pola prędkości ===
 const AdvancedVelocityLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
@@ -465,7 +465,7 @@ const AdvancedVelocityLayer = L.Layer.extend({
     }
 });
 
-// === WindAnimationLayer - Warstwa animacji czÄstek ===
+// === WindAnimationLayer - Warstwa animacji cząstek ===
 const AdvancedWindAnimationLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
@@ -514,7 +514,7 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
     _initializeParticles: function() {
         this._particles = [];
         
-        // UĹźyj rzeczywistych czÄstek z danych jeĹli sÄ dostÄpne
+        // Użyj rzeczywistych cząstek z danych jeśli są dostępne
         if (this._data.particles && this._data.particles.length > 0) {
             const sourceParticles = this._data.particles.slice(0, Math.min(WIND_VIZ_CONFIG.PARTICLE_COUNT, this._data.particles.length));
             
@@ -526,14 +526,14 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
                         x: point.x,
                         y: point.y,
                         vx: particle.vx * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE,
-                        vy: -particle.vy * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE, // odwrĂłÄ Y
+                        vy: -particle.vy * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE, // odwróć Y
                         age: Math.random() * WIND_VIZ_CONFIG.PARTICLE_LIFESPAN,
                         speed: particle.speed
                     });
                 }
             });
         } else {
-            // Fallback - generuj losowe czÄstki
+            // Fallback - generuj losowe cząstki
             for (let i = 0; i < WIND_VIZ_CONFIG.PARTICLE_COUNT; i++) {
                 this._particles.push(this._createRandomParticle());
             }
@@ -554,12 +554,12 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
     _animate: function() {
         this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
         
-        // Ustawienia canvas dla efektu Ĺwiecenia
+        // Ustawienia canvas dla efektu świecenia
         this._ctx.globalCompositeOperation = 'screen';
         this._ctx.lineWidth = WIND_VIZ_CONFIG.PARTICLE_LINE_WIDTH;
         
         this._particles.forEach((particle, index) => {
-            // Aktualizuj pozycjÄ
+            // Aktualizuj pozycję
             const oldX = particle.x;
             const oldY = particle.y;
             
@@ -567,7 +567,7 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
             particle.y += particle.vy;
             particle.age++;
             
-            // SprawdĹş granice i resetuj czÄstkÄ jeĹli wyszĹa poza obszar lub jest za stara
+            // Sprawdź granice i resetuj cząstkę jeśli wyszła poza obszar lub jest za stara
             if (particle.x < 0 || particle.x > this._canvas.width || 
                 particle.y < 0 || particle.y > this._canvas.height || 
                 particle.age > WIND_VIZ_CONFIG.PARTICLE_LIFESPAN) {
@@ -575,7 +575,7 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
                 return;
             }
             
-            // Narysuj Ĺlad czÄstki
+            // Narysuj ślad cząstki
             const alpha = Math.max(0, 1 - particle.age / WIND_VIZ_CONFIG.PARTICLE_LIFESPAN);
             this._ctx.strokeStyle = WIND_VIZ_CONFIG.PARTICLE_COLOR.replace('0.8', alpha.toString());
             this._ctx.beginPath();
@@ -608,7 +608,7 @@ const AdvancedLegendControl = L.Control.extend({
         
         this._container.innerHTML = `
             <div class="legend-content">
-                <h4>PrÄdkoĹÄ wiatru (m/s)</h4>
+                <h4>Prędkość wiatru (m/s)</h4>
                 <div class="legend-gradient" style="background: linear-gradient(to top, ${gradientColors.join(', ')})"></div>
                 <div class="legend-labels">
                     <span>${max.toFixed(1)}</span>
@@ -690,22 +690,22 @@ function addAdvancedWindCSS() {
     document.head.appendChild(style);
 }
 
-// === GĹĂłwna funkcja inicjalizacji zaawansowanej wizualizacji ===
+// === Główna funkcja inicjalizacji zaawansowanej wizualizacji ===
 function initAdvancedWindVisualization() {
     if (!windSimulationData || !maps.wind) {
-        console.log('Brak danych wiatru lub mapy - pomijam zaawansowanÄ wizualizacjÄ');
+        console.log('Brak danych wiatru lub mapy - pomijam zaawansowaną wizualizację');
         return;
     }
     
-    console.log('InicjalizujÄ zaawansowanÄ wizualizacjÄ wiatru...');
+    console.log('Inicjalizuję zaawansowaną wizualizację wiatru...');
     
     const adapter = createWindDataAdapter(windSimulationData);
     if (!adapter) {
-        console.error('Nie moĹźna utworzyÄ adaptera danych wiatru');
+        console.error('Nie można utworzyć adaptera danych wiatru');
         return;
     }
     
-    // UsuĹ istniejÄce warstwy jeĹli istniejÄ
+    // Usuń istniejące warstwy jeśli istnieją
     if (currentVelocityLayer) {
         maps.wind.removeLayer(currentVelocityLayer);
     }
@@ -726,20 +726,20 @@ function initAdvancedWindVisualization() {
     maps.wind.addLayer(currentAnimationLayer);
     maps.wind.addControl(currentLegendControl);
     
-    // Aktualizuj legendÄ z prawdziwymi wartoĹciami
+    // Aktualizuj legendę z prawdziwymi wartościami
     currentLegendControl.update(adapter.minMagnitude, adapter.maxMagnitude);
     
     // Dopasuj widok mapy do obszaru danych
     maps.wind.fitBounds(adapter.bounds);
     
-    console.log('â Zaawansowana wizualizacja wiatru zainicjalizowana');
+    console.log('✅ Zaawansowana wizualizacja wiatru zainicjalizowana');
 }
 
 const sampleData = {
     projects: [
         {
             id: 1,
-            title: "Analiza zagroĹźeĹ powodziowych",
+            title: "Analiza zagrożeń powodziowych",
             category: "flood",
             description: "Modelowanie ryzyka powodziowego z wykorzystaniem danych historycznych i prognoz klimatycznych.",
             image: "images/flood-analysis.jpg",
@@ -749,33 +749,33 @@ const sampleData = {
             id: 2,
             title: "Symulacja mikroklimatyczna",
             category: "climate",
-            description: "SzczegĂłĹowa analiza komfortu termicznego w przestrzeniach miejskich.",
+            description: "Szczegółowa analiza komfortu termicznego w przestrzeniach miejskich.",
             image: "images/microclimate.jpg",
             results: "Poprawa komfortu o 25%"
         },
         {
             id: 3,
-            title: "Analiza przepĹywu powietrza",
+            title: "Analiza przepływu powietrza",
             category: "wind",
             description: "Zaawansowane modelowanie CFD dla optymalizacji wentylacji naturalnej.",
             image: "images/wind-flow.jpg",
-            results: "OszczÄdnoĹci energii 40%"
+            results: "Oszczędności energii 40%"
         }
     ],
     blogPosts: [
         {
             id: 1,
-            title: "PrzyszĹoĹÄ modelowania klimatu miejskiego",
-            excerpt: "Jak nowe technologie zmieniajÄ podejĹcie do planowania miast...",
+            title: "Przyszłość modelowania klimatu miejskiego",
+            excerpt: "Jak nowe technologie zmieniają podejście do planowania miast...",
             date: "2024-03-15",
             category: "technologia"
         },
         {
             id: 2,
-            title: "GIS w sĹuĹźbie zrĂłwnowaĹźonego rozwoju",
-            excerpt: "Zastosowania systemĂłw informacji geograficznej w projektach ekologicznych...",
+            title: "GIS w służbie zrównoważonego rozwoju",
+            excerpt: "Zastosowania systemów informacji geograficznej w projektach ekologicznych...",
             date: "2024-03-10",
-            category: "Ĺrodowisko"
+            category: "środowisko"
         }
     ],
     weatherData: {
@@ -788,7 +788,7 @@ const sampleData = {
     floodData: {
         scenarios: [
             {
-                name: "PowĂłdĹş 10-letnia",
+                name: "Powódź 10-letnia",
                 coordinates: [
                     {lat: 52.2297, lng: 21.0122, depth: 0.5, time: 30},
                     {lat: 52.2305, lng: 21.0135, depth: 0.8, time: 45},
@@ -796,7 +796,7 @@ const sampleData = {
                 ]
             },
             {
-                name: "PowĂłdĹş 100-letnia",
+                name: "Powódź 100-letnia",
                 coordinates: [
                     {lat: 52.2297, lng: 21.0122, depth: 1.5, time: 20},
                     {lat: 52.2305, lng: 21.0135, depth: 2.1, time: 30},
@@ -840,11 +840,11 @@ let thermalMarkers = [];
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
-    // ZaĹaduj dane symulacji wiatru na poczÄtku
+    // Załaduj dane symulacji wiatru na początku
     loadWindSimulationData().then(() => {
         console.log('Aplikacja zainicjalizowana z danymi symulacji wiatru');
     }).catch(error => {
-        console.warn('Inicjalizacja z bĹÄdami Ĺadowania danych:', error);
+        console.warn('Inicjalizacja z błędami ładowania danych:', error);
     });
     
     initNavigation();
@@ -939,7 +939,7 @@ function initThemeToggle() {
 function initWeatherWidget() {
     const weatherData = sampleData.weatherData;
     document.getElementById('weather-location').textContent = weatherData.location;
-    document.getElementById('temperature').textContent = `${weatherData.temperature}Â°C`;
+    document.getElementById('temperature').textContent = `${weatherData.temperature}°C`;
     document.getElementById('humidity').textContent = `${weatherData.humidity}%`;
     document.getElementById('pressure').textContent = `${weatherData.pressure} hPa`;
     document.getElementById('wind-speed').textContent = `${weatherData.windSpeed} km/h`;
@@ -969,12 +969,12 @@ function initMainMap() {
 
     maps.main = L.map('main-map').setView([52.2297, 21.0122], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: 'ÂŠ OpenStreetMap contributors'
+        attribution: '© OpenStreetMap contributors'
     }).addTo(maps.main);
 
     // Add sample markers for different data layers
     const floodMarker = L.marker([52.2297, 21.0122])
-        .bindPopup('<strong>ZagroĹźenie powodziowe</strong><br>GĹÄbokoĹÄ: 0.8m')
+        .bindPopup('<strong>Zagrożenie powodziowe</strong><br>Głębokość: 0.8m')
         .addTo(maps.main);
 
     const thermalMarker = L.marker([52.2305, 21.0135])
@@ -1008,7 +1008,7 @@ function initFloodMap() {
 
     maps.flood = L.map('flood-map').setView([52.2297, 21.0122], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: 'ÂŠ OpenStreetMap contributors'
+        attribution: '© OpenStreetMap contributors'
     }).addTo(maps.flood);
 
     updateFloodVisualization();
@@ -1020,10 +1020,10 @@ function initWindMap() {
 
     maps.wind = L.map('wind-map').setView([52.2297, 21.0122], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: 'ÂŠ OpenStreetMap contributors'
+        attribution: '© OpenStreetMap contributors'
     }).addTo(maps.wind);
 
-    // JeĹli dane wiatru sÄ juĹź zaĹadowane, zainicjalizuj zaawansowanÄ wizualizacjÄ
+    // Jeśli dane wiatru są już załadowane, zainicjalizuj zaawansowaną wizualizację
     if (windSimulationData) {
         addAdvancedWindCSS();
         initAdvancedWindVisualization();
@@ -1038,7 +1038,7 @@ function initThermalMap() {
 
     maps.thermal = L.map('thermal-map').setView([52.2297, 21.0122], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: 'ÂŠ OpenStreetMap contributors'
+        attribution: '© OpenStreetMap contributors'
     }).addTo(maps.thermal);
 
     updateThermalVisualization();
@@ -1050,7 +1050,7 @@ function initContactMap() {
 
     maps.contact = L.map('contact-map').setView([52.2297, 21.0122], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: 'ÂŠ OpenStreetMap contributors'
+        attribution: '© OpenStreetMap contributors'
     }).addTo(maps.contact);
 
     L.marker([52.2297, 21.0122])
@@ -1161,7 +1161,7 @@ function updateFloodVisualization() {
                     fillColor: color,
                     fillOpacity: 0.6,
                     radius: radius
-                }).bindPopup(`<strong>GĹÄbokoĹÄ: ${coord.depth}m</strong><br>Czas: ${coord.time} min`);
+                }).bindPopup(`<strong>Głębokość: ${coord.depth}m</strong><br>Czas: ${coord.time} min`);
                 
                 marker.addTo(maps.flood);
                 floodMarkers.push(marker);
@@ -1186,7 +1186,7 @@ function toggleFloodAnimation() {
     if (animationPlaying) {
         clearInterval(animationInterval);
         animationPlaying = false;
-        playButton.innerHTML = '<i class="fas fa-play"></i> OdtwĂłrz';
+        playButton.innerHTML = '<i class="fas fa-play"></i> Odtwórz';
     } else {
         animationPlaying = true;
         playButton.innerHTML = '<i class="fas fa-pause"></i> Zatrzymaj';
@@ -1204,7 +1204,7 @@ function toggleFloodAnimation() {
     }
 }
 
-// Wind analysis functions - poprawione z obsĹugÄ bĹÄdĂłw Ĺadowania danych
+// Wind analysis functions - poprawione z obsługą błędów ładowania danych
 function updateWindVisualization() {
     if (!maps.wind) return;
 
@@ -1240,14 +1240,14 @@ function updateWindVisualization() {
                                    border-radius: 50%; border: 2px solid white;"></div>`,
                     iconSize: [24, 24]
                 })
-            }).bindPopup(`<strong>PrÄdkoĹÄ wiatru</strong><br>${marker.speed.toFixed(1)} m/s`)
+            }).bindPopup(`<strong>Prędkość wiatru</strong><br>${marker.speed.toFixed(1)} m/s`)
              .addTo(maps.wind);
         });
     }
 
-    // JeĹli dane symulacji sÄ dostÄpne, uĹźyj zaawansowanej wizualizacji
+    // Jeśli dane symulacji są dostępne, użyj zaawansowanej wizualizacji
     if (windSimulationData && currentVelocityLayer) {
-        // OdĹwieĹź zaawansowanÄ wizualizacjÄ jeĹli jest juĹź zainicjalizowana
+        // Odśwież zaawansowaną wizualizację jeśli jest już zainicjalizowana
         initAdvancedWindVisualization();
     }
 }
@@ -1331,7 +1331,7 @@ function updateThermalVisualization() {
             fillOpacity: 0.6,
             radius: 100
         }).bindPopup(`<strong>PMV:</strong> ${zone.pmv}<br>
-                     <strong>Temperatura:</strong> ${zone.temperature}Â°C`);
+                     <strong>Temperatura:</strong> ${zone.temperature}°C`);
 
         marker.addTo(maps.thermal);
         thermalMarkers.push(marker);
@@ -1559,7 +1559,7 @@ function renderBlogPosts() {
                 <p class="blog-excerpt">${post.excerpt}</p>
                 <div class="blog-meta">
                     <span class="blog-date">${new Date(post.date).toLocaleDateString('pl-PL')}</span>
-                    <a href="#" class="read-more">Czytaj wiÄcej</a>
+                    <a href="#" class="read-more">Czytaj więcej</a>
                 </div>
             </div>
         </article>
@@ -1584,7 +1584,7 @@ function initContactForm() {
         const submitButton = contactForm.querySelector('button[type="submit"]');
         const originalText = submitButton.textContent;
         
-        submitButton.textContent = 'WysĹano!';
+        submitButton.textContent = 'Wysłano!';
         submitButton.disabled = true;
         
         setTimeout(() => {
@@ -1646,7 +1646,7 @@ if ('performance' in window) {
     window.addEventListener('load', () => {
         const perfData = performance.timing;
         const loadTime = perfData.loadEventEnd - perfData.navigationStart;
-        console.log(`Czas Ĺadowania strony: ${loadTime}ms`);
+        console.log(`Czas ładowania strony: ${loadTime}ms`);
     });
 }
 
@@ -1665,11 +1665,11 @@ if ('serviceWorker' in navigator) {
 
 // Error handling
 window.addEventListener('error', (e) => {
-    console.error('BĹÄd aplikacji:', e.error);
+    console.error('Błąd aplikacji:', e.error);
     // Here you could send error to logging service
 });
 
 window.addEventListener('unhandledrejection', (e) => {
-    console.error('NieobsĹuĹźone odrzucenie Promise:', e.reason);
+    console.error('Nieobsłużone odrzucenie Promise:', e.reason);
     e.preventDefault();
 });
