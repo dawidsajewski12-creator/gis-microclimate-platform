@@ -41,7 +41,7 @@ function getViridisColor(value, minVal, maxVal) {
 }
 
 
-### 2. Poprawiona funkcja ładowania danych
+//### 2. Poprawiona funkcja ładowania danych
 
 
 // === POPRAWIONA FUNKCJA ŁADOWANIA DANYCH WIATROWYCH ===
@@ -148,7 +148,7 @@ async function loadWindSimulationData() {
 }
 
 
-### 3. Funkcja wizualizacji zgodna z kodem Python
+//### 3. Funkcja wizualizacji zgodna z kodem Python
 
 
 // === FUNKCJA WIZUALIZACJI ZGODNA Z KODEM PYTHON ===
