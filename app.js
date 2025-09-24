@@ -1,22 +1,6 @@
 // Sample data from provided JSON
 // === PODSTAWOWE FUNKCJE ŁADOWANIA DANYCH ===
-let windSimulationData = null;
 
-
-
-
-// === ZAAWANSOWANA WIZUALIZACJA WIATRU - INTEGRACJA Z DZIAŁAJĄCYM KODEM ===
-
-// Parametry konfiguracyjne wizualizacji
-const WIND_VIZ_CONFIG = {
-    PARTICLE_COUNT: 6000,
-    PARTICLE_SPEED_SCALE: 0.2,
-    PARTICLE_LIFESPAN: 1000,
-    PARTICLE_LINE_WIDTH: 1.6,
-    PARTICLE_COLOR: "rgba(110, 190, 255, 0.8)",
-    GLOW_COLOR: "rgba(110, 190, 255, 0.5)",
-    GLOW_BLUR: 7
-};
 
 // Funkcja mapowania wartości na kolor (skala Viridis)
 function getViridisColor(value, min, max) {
