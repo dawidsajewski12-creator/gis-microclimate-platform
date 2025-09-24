@@ -271,7 +271,7 @@ const AdvancedVelocityLayer = L.Layer.extend({
             ctx.fillStyle = getViridisColor(magnitude, minMagnitude, maxMagnitude);
             ctx.fillRect(Math.round(point.x - 2), Math.round(point.y - 2), 4, 4);
         });
-    }
+    },
 
 // === WindAnimationLayer - Warstwa animacji cząstek ===
 const AdvancedWindAnimationLayer = L.Layer.extend({
