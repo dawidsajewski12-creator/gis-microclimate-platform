@@ -66,10 +66,6 @@ async function loadWindSimulationData() {
         
         // POPRAWIONA ścieżka - spróbuj różnych możliwych lokalizacji
         const possiblePaths = [
-            'wind_simulation_results.json',           // bezpośrednio w folderze
-            'api/data/wind_simulation_results.json',  // w api
-            'data/wind_simulation_results.json',      // w data
-            'current.json',                           // obecna nazwa
             'api/data/wind_simulation/current.json'   // obecna ścieżka
         ];
         
