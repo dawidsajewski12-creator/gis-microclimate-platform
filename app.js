@@ -6,7 +6,7 @@ async function loadWindSimulationData() {
         console.log('Ładowanie danych symulacji wiatru...');
         
         // Użyj tej samej ścieżki co Python
-        const response = await fetch('/content/wind_simulation_output/current.json');
+        const response = await fetch('api/data/wind_simulation/current.json');
         
         if (!response.ok) {
             console.error(`Błąd ładowania: ${response.status}`);
