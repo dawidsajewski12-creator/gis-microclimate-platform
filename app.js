@@ -50,7 +50,7 @@ async function loadWindSimulationData() {
         console.log('Ładowanie danych symulacji wiatru z current.json...');
         
         // Wczytaj dane z current.json
-        const response = await fetch('current.json'); // Zmień ścieżkę na właściwą
+        const response = await fetch('api/data/wind_simulation/current.json'); // Zmień ścieżkę na właściwą
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
