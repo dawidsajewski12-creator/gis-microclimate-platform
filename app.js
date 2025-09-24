@@ -459,7 +459,7 @@ const AdvancedVelocityLayer = L.Layer.extend({
                     if (!isFinite(value)) continue;
     
                     ctx.fillStyle = getViridisColor(value, minMagnitude, maxMagnitude);
-                    ctx.fillRect(Math.round(point.x - 2), Math.round(point.y - 2), 4, 4);
+                    ctx.fillRect(Math.round(point.x - 2), Math.round(point.y - 2), 12, 12);
             }
         }
     }
