@@ -1,25 +1,28 @@
-// === POPRAWIONY KOD WIZUALIZACJI WIATRU ===
-
+// === KOMPLETNY POPRAWIONY KOD APP.JS ===
 // Globalne zmienne - MUSI BYĆ NA POCZĄTKU!
 let windSimulationData = null;
 let maps = {};
 
-// Funkcja mapowania kolorów Viridis (poprawiona interpolacja)
+// === TEST CZY PODSTAWOWE FUNKCJE DZIAŁAJĄ ===
+console.log('🟢 JavaScript załadowany');
+
+// Funkcja mapowania kolorów Viridis (tak jak w Python branca.colormap)
 function getViridisColor(value, minVal, maxVal) {
     if (minVal === maxVal) {
         return 'rgba(68, 1, 84, 0.8)'; // Ciemny fiolet dla wszystkich wartości gdy min=max
     }
     
-    // Normalizacja wartości do zakresu [0, 1]
+    // Normalizacja wartości do zakresu[1]
     const t = Math.max(0, Math.min(1, (value - minVal) / (maxVal - minVal)));
     
-    // Poprawiona paleta kolorów Viridis
+    // Paleta kolorów Viridis - interpolacja między kolorami
     const colors = [
-        [68, 1, 84],      // darkblue
-        [59, 82, 139],    // blue  
-        [33, 145, 140],   // cyan
-        [94, 201, 98],    // yellow-green
-        [253, 231, 37],   // yellow
+        ,      // darkblue[1]
+        ,    // blue
+        ,   // cyan
+        ,    // yellow-green
+        ,   // yellow
+            // orange-red
     ];
     
     // Znajdź segment w którym znajduje się t
@@ -29,22 +32,22 @@ function getViridisColor(value, minVal, maxVal) {
     
     // Interpolacja między dwoma kolorami
     const color1 = colors[segment];
-    const color2 = colors[Math.min(segment + 1, colors.length - 1)]; // Poprawka: zabezpieczenie przed przekroczeniem indeksu
+    const color2 = colors[segment + 1];
     
-    const r = Math.round(color1[0] + (color2[0] - color1[0]) * localT);
-    const g = Math.round(color1[1] + (color2[1] - color1[1]) * localT);
-    const b = Math.round(color1[2] + (color2[2] - color1[2]) * localT);
+    const r = Math.round(color1 + (color2 - color1) * localT);
+    const g = Math.round(color1 + (color2 - color1) * localT);[1]
+    const b = Math.round(color1 + (color2 - color1) * localT);[2]
     
     return `rgba(${r}, ${g}, ${b}, 0.8)`;
 }
 
-// === POPRAWIONA FUNKCJA ŁADOWANIA DANYCH WIATROWYCH ===
+// POPRAWIONA FUNKCJA ŁADOWANIA DANYCH WIATROWYCH
 async function loadWindSimulationData() {
     try {
         console.log('Ładowanie danych symulacji wiatru z current.json...');
         
-        // Wczytaj dane z current.json
-        const response = await fetch('api/data/wind_simulation/current.json');
+        // Wczytaj dane z current.json (zmień ścieżkę na właściwą)
+        const response = await fetch('current-1.json');
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -58,54 +61,45 @@ async function loadWindSimulationData() {
         console.log('Spatial reference:', data.spatial_reference);
         console.log('Flow statistics:', data.flow_statistics);
         console.log('Vector field points:', data.vector_field ? data.vector_field.length : 0);
-        console.log('Magnitude grid size:', data.magnitude_grid ? `${data.magnitude_grid.length}x${data.magnitude_grid[0]?.length}` : 'brak');
-        
-        // Sprawdź bounds
-        const bounds = data.spatial_reference?.bounds_wgs84;
-        if (bounds) {
-            console.log('Bounds WGS84:', bounds);
-        }
         
         // Sprawdź niezerowe wartości w magnitude_grid
         let nonZeroCount = 0;
         let minMag = Infinity;
         let maxMag = -Infinity;
         
-        if (data.magnitude_grid && Array.isArray(data.magnitude_grid)) {
+        if (data.magnitude_grid) {
             for (let i = 0; i < data.magnitude_grid.length; i++) {
-                if (Array.isArray(data.magnitude_grid[i])) { // Poprawka: sprawdź czy wiersz jest tablicą
-                    for (let j = 0; j < data.magnitude_grid[i].length; j++) {
-                        const val = data.magnitude_grid[i][j];
-                        if (val !== null && val !== undefined && val !== 0.0) { // Poprawka: lepsze sprawdzanie wartości
-                            nonZeroCount++;
-                            minMag = Math.min(minMag, val);
-                            maxMag = Math.max(maxMag, val);
-                        }
+                for (let j = 0; j < data.magnitude_grid[i].length; j++) {
+                    const val = data.magnitude_grid[i][j];
+                    if (val !== 0.0) {
+                        nonZeroCount++;
+                        minMag = Math.min(minMag, val);
+                        maxMag = Math.max(maxMag, val);
                     }
                 }
             }
         }
         
         // Jeśli nie ma niezerowych wartości w magnitude_grid, użyj flow_statistics
-        if (nonZeroCount === 0 || minMag === Infinity) {
+        if (nonZeroCount === 0) {
             minMag = data.flow_statistics?.min_magnitude || 0;
             maxMag = data.flow_statistics?.max_magnitude || 1;
-            console.log('⚠️ Wszystkie wartości w magnitude_grid są zerowe lub brakuje danych, używam flow_statistics');
+            console.log('⚠️ Wszystkie wartości w magnitude_grid są zerowe, używam flow_statistics');
         } else {
             console.log(`✅ Znaleziono ${nonZeroCount} niezerowych wartości, zakres: ${minMag} - ${maxMag}`);
         }
         
         // Zwróć dane w formacie oczekiwanym przez resztę aplikacji
         windSimulationData = {
-            metadata: data.metadata || {},
-            spatial_reference: data.spatial_reference || {},
+            metadata: data.metadata,
+            spatial_reference: data.spatial_reference,
             flow_statistics: {
                 ...data.flow_statistics,
                 min_magnitude: minMag === Infinity ? 0 : minMag,
                 max_magnitude: maxMag === -Infinity ? 1 : maxMag
             },
-            magnitude_grid: data.magnitude_grid || [],
-            vector_field: data.vector_field || [],
+            magnitude_grid: data.magnitude_grid,
+            vector_field: data.vector_field,
             streamlines: data.streamlines || [],
             particles: data.particles || []
         };
@@ -116,7 +110,6 @@ async function loadWindSimulationData() {
         console.error('❌ Błąd podczas ładowania danych:', error);
         console.log('Używam pustych danych fallback...');
         
-        // Zwróć minimalne dane fallback
         windSimulationData = {
             metadata: {
                 title: "Brak danych wiatrowych",
@@ -142,11 +135,11 @@ async function loadWindSimulationData() {
     }
 }
 
-// === POPRAWIONA FUNKCJA WIZUALIZACJI ===
+// FUNKCJA WIZUALIZACJI ZGODNA Z KODEM PYTHON
 function createWindVisualizationLayer(map, data) {
     console.log('Tworzenie warstwy wizualizacji wiatru...');
     
-    if (!data.vector_field || !Array.isArray(data.vector_field) || data.vector_field.length === 0) {
+    if (!data.vector_field || data.vector_field.length === 0) {
         console.warn('Brak danych vector_field do wizualizacji');
         return null;
     }
@@ -157,180 +150,144 @@ function createWindVisualizationLayer(map, data) {
         return null;
     }
     
-    // Pobierz min/max magnitude dla kolorów
-    const minMag = data.flow_statistics?.min_magnitude || 0;
-    const maxMag = data.flow_statistics?.max_magnitude || 1;
+    const minMag = data.flow_statistics.min_magnitude;
+    const maxMag = data.flow_statistics.max_magnitude;
     
     console.log(`Zakres magnitude: ${minMag} - ${maxMag}`);
     
-    // Utworz warstwę punktów wektora wiatru
     const windLayer = L.featureGroup();
     
-    // Poprawka: dodaj obsługę błędów dla każdego punktu
-    let validPointsCount = 0;
-    
     data.vector_field.forEach((vector, index) => {
-        try {
-            // Sprawdź czy vector ma wymagane właściwości
-            if (!vector || typeof vector.latitude !== 'number' || typeof vector.longitude !== 'number') {
-                console.warn(`Pominięto punkt ${index}: brak prawidłowych współrzędnych`);
-                return;
-            }
-            
-            const lat = vector.latitude;
-            const lon = vector.longitude;
-            const magnitude = vector.magnitude || 0;
-            const vx = vector.vx || 0;
-            const vy = vector.vy || 0;
-            
-            // Sprawdź czy współrzędne są prawidłowe
-            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-                console.warn(`Pominięto punkt ${index}: nieprawidłowe współrzędne (${lat}, ${lon})`);
-                return;
-            }
-            
-            // Dobór koloru na podstawie prędkości
-            const color = getViridisColor(magnitude, minMag, maxMag);
-            
-            // Utwórz CircleMarker
-            const marker = L.circleMarker([lat, lon], {
-                radius: Math.max(3, Math.min(8, magnitude * 2)), // Poprawka: dynamiczny rozmiar na podstawie prędkości
-                color: color,
-                fill: true,
-                fillColor: color,
-                fillOpacity: 0.8,
-                weight: 1
-            });
-            
-            // Dodaj popup z informacjami
-            marker.bindPopup(`
-                <div style="font-family: Arial, sans-serif;">
-                    <strong>Prędkość:</strong> ${magnitude.toFixed(2)} m/s<br>
-                    <strong>Vx:</strong> ${vx.toFixed(2)} m/s<br>
-                    <strong>Vy:</strong> ${vy.toFixed(2)} m/s<br>
-                    <strong>Pozycja:</strong> ${lat.toFixed(6)}°, ${lon.toFixed(6)}°
-                </div>
-            `);
-            
-            windLayer.addLayer(marker);
-            validPointsCount++;
-            
-        } catch (error) {
-            console.warn(`Błąd przy przetwarzaniu punktu ${index}:`, error);
-        }
+        const lat = vector.latitude;
+        const lon = vector.longitude;
+        const magnitude = vector.magnitude;
+        const vx = vector.vx;
+        const vy = vector.vy;
+        
+        const color = getViridisColor(magnitude, minMag, maxMag);
+        
+        const marker = L.circleMarker([lat, lon], {
+            radius: 5,
+            color: color,
+            fill: true,
+            fillColor: color,
+            fillOpacity: 0.8,
+            weight: 1
+        });
+        
+        marker.bindPopup(`
+            <strong>Prędkość:</strong> ${magnitude.toFixed(2)} m/s<br>
+            <strong>Vx:</strong> ${vx.toFixed(2)}<br>
+            <strong>Vy:</strong> ${vy.toFixed(2)}<br>
+            <strong>Pozycja:</strong> ${lat.toFixed(6)}, ${lon.toFixed(6)}
+        `);
+        
+        windLayer.addLayer(marker);
     });
     
-    console.log(`✅ Utworzono ${validPointsCount} prawidłowych punktów wiatrowych z ${data.vector_field.length} dostępnych`);
-    return validPointsCount > 0 ? windLayer : null;
+    console.log(`✅ Utworzono ${data.vector_field.length} punktów wiatrowych`);
+    return windLayer;
 }
 
-// === POPRAWIONA FUNKCJA TWORZENIA LEGENDY ===
+// FUNKCJA TWORZENIA LEGENDY KOLORÓW (jak w Python)
 function createWindLegend(minMag, maxMag) {
     const legend = L.control({position: 'bottomright'});
     
     legend.onAdd = function(map) {
         const div = L.DomUtil.create('div', 'wind-legend');
-        
-        // Poprawka: lepsze generowanie gradientu
-        const gradientSteps = [];
-        for (let i = 0; i <= 10; i++) {
-            const value = minMag + (i / 10) * (maxMag - minMag);
-            gradientSteps.push(getViridisColor(value, minMag, maxMag));
-        }
-        
         div.innerHTML = `
-            <div style="background: white; padding: 10px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-family: Arial, sans-serif;">
-                <h4 style="margin: 0 0 10px 0; font-size: 14px;">Prędkość wiatru [m/s]</h4>
+            <div style="background: white; padding: 10px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2);">
+                <h4 style="margin: 0 0 10px 0;">Prędkość wiatru [m/s]</h4>
                 <div style="display: flex; align-items: center;">
-                    <div style="width: 20px; height: 100px; background: linear-gradient(to top, ${gradientSteps.join(', ')}); margin-right: 10px; border: 1px solid #ccc;"></div>
-                    <div style="font-size: 12px; height: 100px; display: flex; flex-direction: column; justify-content: space-between;">
-                        <div>${maxMag.toFixed(1)}</div>
-                        <div>${((minMag + maxMag) / 2).toFixed(1)}</div>
+                    <div style="width: 20px; height: 100px; background: linear-gradient(to top, 
+                        ${getViridisColor(minMag, minMag, maxMag)}, 
+                        ${getViridisColor(maxMag * 0.2, minMag, maxMag)},
+                        ${getViridisColor(maxMag * 0.4, minMag, maxMag)},
+                        ${getViridisColor(maxMag * 0.6, minMag, maxMag)},
+                        ${getViridisColor(maxMag * 0.8, minMag, maxMag)},
+                        ${getViridisColor(maxMag, minMag, maxMag)}
+                    ); margin-right: 10px;"></div>
+                    <div>
+                        <div style="margin-bottom: 70px;">${maxMag.toFixed(1)}</div>
                         <div>${minMag.toFixed(1)}</div>
                     </div>
                 </div>
             </div>
         `;
-        
-        // Poprawka: zapobiegaj propagacji zdarzeń mapy
-        L.DomEvent.disableClickPropagation(div);
-        L.DomEvent.disableScrollPropagation(div);
-        
         return div;
     };
     
     return legend;
 }
 
-// === POPRAWIONA GŁÓWNA FUNKCJA INICJALIZACJI ===
-async function initWindVisualization(map) {
-    try {
-        console.log('Inicjalizacja wizualizacji wiatru...');
+// GŁÓWNA FUNKCJA INICJALIZACJI WIZUALIZACJI
+function initWindVisualization(map) {
+    if (window.currentWindLayer) {
+        map.removeLayer(window.currentWindLayer);
+    }
+    if (window.currentWindLegend) {
+        map.removeControl(window.currentWindLegend);
+    }
+    
+    if (!windSimulationData) {
+        console.warn('Brak danych wiatrowych do wizualizacji');
+        return;
+    }
+    
+    const windLayer = createWindVisualizationLayer(map, windSimulationData);
+    if (windLayer) {
+        map.addLayer(windLayer);
+        window.currentWindLayer = windLayer;
         
-        // Usuń poprzednie warstwy wiatrowe jeśli istnieją
-        if (window.currentWindLayer) {
-            map.removeLayer(window.currentWindLayer);
-            delete window.currentWindLayer;
-        }
-        if (window.currentWindLegend) {
-            map.removeControl(window.currentWindLegend);
-            delete window.currentWindLegend;
-        }
+        const legend = createWindLegend(
+            windSimulationData.flow_statistics.min_magnitude,
+            windSimulationData.flow_statistics.max_magnitude
+        );
+        map.addControl(legend);
+        window.currentWindLegend = legend;
         
-        // Załaduj dane jeśli nie są jeszcze załadowane
-        if (!windSimulationData) {
-            console.log('Ładowanie danych...');
-            await loadWindSimulationData();
-        }
+        const bounds = windSimulationData.spatial_reference.bounds_wgs84;
+        const leafletBounds = L.latLngBounds(
+            [bounds.south, bounds.west],
+            [bounds.north, bounds.east]
+        );
+        map.fitBounds(leafletBounds);
         
-        // Sprawdź czy dane są dostępne
-        if (!windSimulationData || !windSimulationData.vector_field) {
-            console.warn('Brak danych wiatrowych do wizualizacji');
-            return false;
-        }
-        
-        // Utwórz warstwę wizualizacji
-        const windLayer = createWindVisualizationLayer(map, windSimulationData);
-        if (windLayer) {
-            // Dodaj do mapy
-            map.addLayer(windLayer);
-            window.currentWindLayer = windLayer;
-            
-            // Utwórz legendę
-            const legend = createWindLegend(
-                windSimulationData.flow_statistics.min_magnitude,
-                windSimulationData.flow_statistics.max_magnitude
-            );
-            map.addControl(legend);
-            window.currentWindLegend = legend;
-            
-            // Poprawka: bezpieczne dopasowanie widoku mapy do bounds
-            const bounds = windSimulationData.spatial_reference?.bounds_wgs84;
-            if (bounds && bounds.west !== undefined && bounds.east !== undefined && 
-                bounds.south !== undefined && bounds.north !== undefined) {
-                try {
-                    const leafletBounds = L.latLngBounds(
-                        [bounds.south, bounds.west],
-                        [bounds.north, bounds.east]
-                    );
-                    map.fitBounds(leafletBounds, { padding: [20, 20] }); // Dodaj padding
-                } catch (error) {
-                    console.warn('Błąd przy dopasowaniu widoku mapy:', error);
-                }
-            }
-            
-            console.log('✅ Wizualizacja wiatru zainicjalizowana pomyślnie');
-            return true;
-        } else {
-            console.error('❌ Nie udało się utworzyć warstwy wizualizacji');
-            return false;
-        }
-        
-    } catch (error) {
-        console.error('❌ Błąd podczas inicjalizacji wizualizacji wiatru:', error);
-        return false;
+        console.log('✅ Wizualizacja wiatru zainicjalizowana');
     }
 }
+
+// LegendControl - Kontrolka legendy (Enhanced) - pozostaje bez zmian
+const AdvancedLegendControl = L.Control.extend({
+    options: {
+        position: 'bottomright'
+    },
+
+    onAdd: function(map) {
+        this._container = L.DomUtil.create('div', 'leaflet-control legend-control');
+        this.update();
+        return this._container;
+    },
+
+    update: function(min = 0, max = 1) {
+        const gradientColors = [];
+        for (let i = 0; i <= 100; i += 10) {
+            gradientColors.push(getViridisColor(min + (i/100)*(max-min), min, max));
+        }
+        
+        this._container.innerHTML = `
+            <div class="legend-content">
+                <h4>Prędkość wiatru (m/s)</h4>
+                <div class="legend-gradient" style="background: linear-gradient(to top, ${gradientColors.join(', ')})"></div>
+                <div class="legend-labels">
+                    <span>${max.toFixed(1)}</span>
+                    <span>${((min + max) / 2).toFixed(1)}</span>
+                    <span>${min.toFixed(1)}</span>
+                </div>
+            </div>
+        `;
+    }
+});
 
 // === POPRAWIONA KLASA KONTROLKI LEGENDY ===
 const AdvancedLegendControl = L.Control.extend({
