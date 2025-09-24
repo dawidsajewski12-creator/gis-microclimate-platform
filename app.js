@@ -1,6 +1,67 @@
 // Sample data from provided JSON
 // === PODSTAWOWE FUNKCJE ŁADOWANIA DANYCH ===
+let windSimulationData = null;
 
+async function loadWindSimulationData() {
+    try {
+        const response = await fetch('data/wind_simulation_results.json');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        windSimulationData = await response.json();
+        console.log('Dane symulacji wiatru załadowane:', windSimulationData.metadata);
+        
+        // NOWE: Walidacja danych
+        if (!windSimulationData.spatial_reference) {
+            console.warn('Brak informacji spatial_reference w danych!');
+        } else {
+            console.log('CRS danych:', windSimulationData.spatial_reference.crs);
+            console.log('Bounds WGS84:', windSimulationData.spatial_reference.bounds_wgs84);
+        }
+        
+        // Sprawdź czy vector_field ma współrzędne geograficzne
+        if (windSimulationData.vector_field && windSimulationData.vector_field.length > 0) {
+            const firstPoint = windSimulationData.vector_field[0];
+            if (firstPoint.longitude !== undefined && firstPoint.latitude !== undefined) {
+                console.log('✅ Dane zawierają współrzędne geograficzne');
+                console.log('Przykładowy punkt:', {
+                    pixel: `(${firstPoint.pixel_x}, ${firstPoint.pixel_y})`,
+                    geo: `(${firstPoint.longitude.toFixed(6)}, ${firstPoint.latitude.toFixed(6)})`
+                });
+            } else {
+                console.error('❌ Dane NIE zawierają współrzędnych geograficznych!');
+            }
+        }
+        
+        // Po załadowaniu danych, dodaj CSS i zainicjalizuj zaawansowaną wizualizację
+        if (maps.wind) {
+            addAdvancedWindCSS();
+            initAdvancedWindVisualization();
+        }
+        
+        return windSimulationData;
+        
+    } catch (error) {
+        console.error('Błąd podczas ładowania danych symulacji wiatru:', error);
+        return null;
+    }
+}
+
+
+
+// === ZAAWANSOWANA WIZUALIZACJA WIATRU - INTEGRACJA Z DZIAŁAJĄCYM KODEM ===
+
+// Parametry konfiguracyjne wizualizacji
+const WIND_VIZ_CONFIG = {
+    PARTICLE_COUNT: 6000,
+    PARTICLE_SPEED_SCALE: 0.2,
+    PARTICLE_LIFESPAN: 1000,
+    PARTICLE_LINE_WIDTH: 1.6,
+    PARTICLE_COLOR: "rgba(110, 190, 255, 0.8)",
+    GLOW_COLOR: "rgba(110, 190, 255, 0.5)",
+    GLOW_BLUR: 7
+};
 
 // Funkcja mapowania wartości na kolor (skala Viridis)
 function getViridisColor(value, min, max) {
