@@ -16,10 +16,10 @@ const WIND_VIZ_CONFIG = {
     STREAMLINE_COLOR: "rgba(80, 100, 130, 0.5)",
     STREAMLINE_WIDTH: 1.5,
     SHOW_VECTORS: false,
-    SHOW_STATISTICS: true,
+    SHOW_STATISTICS: false,
     SHOW_HEATMAP: true,
-    SHOW_STREAMLINES: true,
-    SHOW_PARTICLES: true
+    SHOW_STREAMLINES: false,
+    SHOW_PARTICLES: false
 };
 
 
