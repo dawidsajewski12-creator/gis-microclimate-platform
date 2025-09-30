@@ -446,7 +446,7 @@ const AdvancedVelocityLayer = L.Layer.extend({
                 const value = grid[j] && grid[j][i] !== undefined ? grid[j][i] : NaN;
                 if (!isFinite(value)) continue;
                 
-                ctx.fillStyle = getViridisColor(value, minMagnitude, maxMagnitude);
+                ctx.fillStyle = getCFDColor(value, minMagnitude, maxMagnitude);
                 ctx.fillRect(Math.round(point.x - 2), Math.round(point.y - 2), 4, 4);
             }
         }
@@ -496,13 +496,13 @@ const StreamlineLayer = L.Layer.extend({
         const ctx = this._ctx;
         ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
         
-        ctx.strokeStyle = WIND_VIZ_CONFIG.STREAMLINE_COLOR;
-        ctx.lineWidth = WIND_VIZ_CONFIG.STREAMLINE_WIDTH;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
-        ctx.shadowColor = WIND_VIZ_CONFIG.STREAMLINE_COLOR;
-        ctx.shadowBlur = 3;
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+        ctx.shadowBlur = 4;
         
         this._data.streamlines.forEach(streamline => {
             if (streamline.length < 2) return;
@@ -523,7 +523,7 @@ const StreamlineLayer = L.Layer.extend({
     }
 });
 
-// === WindAnimationLayer - Warstwa animacji cząstek ===
+// === WindAnimationLayer - Warstwa animacji cząstek (LEPIEJ WIDOCZNE) ===
 const AdvancedWindAnimationLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
@@ -617,10 +617,12 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
     },
     
     _animate: function() {
-        this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+        // Efekt zanikania zamiast czyszczenia - pozostawia ślad
+        this._ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+        this._ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
         
-        this._ctx.globalCompositeOperation = 'source-over';
-        this._ctx.lineWidth = WIND_VIZ_CONFIG.PARTICLE_LINE_WIDTH;
+        this._ctx.globalCompositeOperation = 'lighter';
+        this._ctx.lineWidth = 2.5;
         
         this._particles.forEach((particle, index) => {
             const oldX = particle.x;
@@ -655,19 +657,32 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
                 return;
             }
             
-            const alpha = Math.max(0, 1 - particle.age / WIND_VIZ_CONFIG.PARTICLE_LIFESPAN);
-            this._ctx.strokeStyle = WIND_VIZ_CONFIG.PARTICLE_COLOR.replace('0.7', (alpha * 0.7).toString());
+            // Jasna biała cząstka z mocnym glow
+            const alpha = Math.max(0.4, 1 - particle.age / WIND_VIZ_CONFIG.PARTICLE_LIFESPAN);
+            
+            // Rysuj cząstkę jako linię
+            this._ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+            this._ctx.shadowColor = `rgba(200, 220, 255, ${alpha * 0.8})`;
+            this._ctx.shadowBlur = 6;
+            
             this._ctx.beginPath();
             this._ctx.moveTo(oldX, oldY);
             this._ctx.lineTo(particle.x, particle.y);
             this._ctx.stroke();
+            
+            // Dodatkowy punkt na końcu dla lepszej widoczności
+            this._ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+            this._ctx.beginPath();
+            this._ctx.arc(particle.x, particle.y, 1.5, 0, Math.PI * 2);
+            this._ctx.fill();
         });
         
+        this._ctx.shadowBlur = 0;
         this._animationFrame = requestAnimationFrame(() => this._animate());
     }
 });
 
-// === AdvancedWindControlPanel - Panel sterowania ===
+// === AdvancedWindControlPanel - Panel sterowania (UPROSZCZONY) ===
 const AdvancedWindControlPanel = L.Control.extend({
     options: {
         position: 'topleft'
@@ -738,19 +753,9 @@ const AdvancedWindControlPanel = L.Control.extend({
                             Narzędzia
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 6px;">
-                            <button id="tool-measure" class="tool-button" style="display: flex; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; background: rgba(96, 165, 250, 0.1); color: #e0e0e0; cursor: pointer; transition: all 0.2s;">
-                                <span style="margin-right: 10px;">📏</span>
-                                <span style="font-size: 13px;">Pomiar odległości</span>
-                            </button>
-                            
-                            <button id="tool-probe" class="tool-button" style="display: flex; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; background: rgba(96, 165, 250, 0.1); color: #e0e0e0; cursor: pointer; transition: all 0.2s;">
-                                <span style="margin-right: 10px;">🎯</span>
-                                <span style="font-size: 13px;">Odczyt wartości</span>
-                            </button>
-                            
                             <button id="tool-export" class="tool-button" style="display: flex; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; background: rgba(96, 165, 250, 0.1); color: #e0e0e0; cursor: pointer; transition: all 0.2s;">
                                 <span style="margin-right: 10px;">💾</span>
-                                <span style="font-size: 13px;">Eksport danych</span>
+                                <span style="font-size: 13px;">Eksport danych JSON</span>
                             </button>
                         </div>
                     </div>
@@ -816,14 +821,6 @@ const AdvancedWindControlPanel = L.Control.extend({
             const value = e.target.value;
             this._container.querySelector('#particle-density-value').textContent = value;
             this._updateParticleDensity(parseInt(value));
-        });
-        
-        this._container.querySelector('#tool-measure').addEventListener('click', () => {
-            alert('Narzędzie pomiaru: Kliknij dwa punkty na mapie aby zmierzyć odległość');
-        });
-        
-        this._container.querySelector('#tool-probe').addEventListener('click', () => {
-            alert('Narzędzie odczytu: Kliknij punkt na mapie aby odczytać wartości wiatru');
         });
         
         this._container.querySelector('#tool-export').addEventListener('click', () => {
@@ -910,126 +907,7 @@ const AdvancedWindControlPanel = L.Control.extend({
     }
 });
 
-// === WindStatisticsPanel - Panel statystyk ===
-const WindStatisticsPanel = L.Control.extend({
-    options: {
-        position: 'topright'
-    },
-    
-    initialize: function(data, options) {
-        L.Control.prototype.initialize.call(this, options);
-        this._data = data;
-    },
-    
-    onAdd: function(map) {
-        this._map = map;
-        this._container = L.DomUtil.create('div', 'leaflet-control wind-stats-panel');
-        this._container.style.background = 'rgba(30, 35, 45, 0.95)';
-        this._container.style.padding = '15px';
-        this._container.style.borderRadius = '8px';
-        this._container.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-        this._container.style.minWidth = '320px';
-        this._container.style.color = '#e0e0e0';
-        
-        this._render();
-        return this._container;
-    },
-    
-    _render: function() {
-        const stats = this._data.flow_statistics || {};
-        const metadata = this._data.metadata || {};
-        const performance = this._data.performance || {};
-        
-        this._container.innerHTML = `
-            <div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <h3 style="margin: 0; font-size: 16px; font-weight: 600;">
-                        <span style="margin-right: 8px;">📊</span>
-                        Statystyki Symulacji
-                    </h3>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                    <div class="kpi-card" style="background: linear-gradient(135deg, rgba(96, 165, 250, 0.2), rgba(59, 130, 246, 0.1)); padding: 12px; border-radius: 6px; border: 1px solid rgba(96, 165, 250, 0.3);">
-                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Max</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #60a5fa;">${stats.max_magnitude?.toFixed(2) || 'N/A'}</div>
-                        <div style="font-size: 11px; color: #9ca3af;">m/s</div>
-                    </div>
-                    
-                    <div class="kpi-card" style="background: linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.1)); padding: 12px; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.3);">
-                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Średnia</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #34d399;">${stats.mean_magnitude?.toFixed(2) || 'N/A'}</div>
-                        <div style="font-size: 11px; color: #9ca3af;">m/s</div>
-                    </div>
-                    
-                    <div class="kpi-card" style="background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.1)); padding: 12px; border-radius: 6px; border: 1px solid rgba(251, 191, 36, 0.3);">
-                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Mediana</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #fbbf24;">${stats.median_magnitude?.toFixed(2) || 'N/A'}</div>
-                        <div style="font-size: 11px; color: #9ca3af;">m/s</div>
-                    </div>
-                    
-                    <div class="kpi-card" style="background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(139, 92, 246, 0.1)); padding: 12px; border-radius: 6px; border: 1px solid rgba(167, 139, 250, 0.3);">
-                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Odch. std.</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #a78bfa;">${stats.std_magnitude?.toFixed(2) || 'N/A'}</div>
-                        <div style="font-size: 11px; color: #9ca3af;">m/s</div>
-                    </div>
-                </div>
-                
-                <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 12px; margin-bottom: 15px;">
-                    <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px; color: #9ca3af;">Rozkład percentylowy</div>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        ${this._createStatRow('95%', stats.percentile_95?.toFixed(2), 'm/s')}
-                        ${this._createStatRow('75%', stats.percentile_75?.toFixed(2), 'm/s')}
-                        ${this._createStatRow('25%', stats.percentile_25?.toFixed(2), 'm/s')}
-                        ${this._createStatRow('5%', stats.percentile_05?.toFixed(2), 'm/s')}
-                    </div>
-                </div>
-                
-                <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 12px; margin-bottom: 15px;">
-                    <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px; color: #9ca3af;">Metryki zaawansowane</div>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        ${this._createStatRow('Wirowość średnia', stats.mean_vorticity?.toFixed(3), '1/s')}
-                        ${this._createStatRow('Intensywność turbulencji', stats.turbulence_intensity?.toFixed(3), '-')}
-                    </div>
-                </div>
-                
-                <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 12px;">
-                    <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px; color: #9ca3af;">Wydajność obliczeń</div>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        ${this._createStatRow('Czas symulacji', performance.simulation_time?.toFixed(1), 's')}
-                        ${this._createStatRow('Iteracje/s', performance.iterations_per_second?.toFixed(1), '')}
-                        ${this._createStatRow('Komórki/s', this._formatNumber(performance.grid_cells_per_second), '')}
-                    </div>
-                </div>
-                
-                ${metadata.timestamp ? `
-                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: #6b7280; text-align: center;">
-                    <span style="margin-right: 4px;">🕒</span>
-                    ${new Date(metadata.timestamp * 1000).toLocaleString('pl-PL')}
-                </div>
-                ` : ''}
-            </div>
-        `;
-    },
-    
-    _createStatRow: function(label, value, unit) {
-        return `
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
-                <span style="color: #9ca3af;">${label}</span>
-                <span style="font-weight: 600; color: #e0e0e0;">${value || 'N/A'} <span style="color: #6b7280; font-size: 11px;">${unit}</span></span>
-            </div>
-        `;
-    },
-    
-    _formatNumber: function(num) {
-        if (!num) return 'N/A';
-        if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
-        if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
-        return num.toFixed(0);
-    }
-});
-
-// === AdvancedLegendControl - Ulepszona legenda ===
+// === AdvancedLegendControl - Legenda z CFD kolorystyką ===
 const AdvancedLegendControl = L.Control.extend({
     options: {
         position: 'bottomright'
@@ -1044,7 +922,7 @@ const AdvancedLegendControl = L.Control.extend({
     update: function(min = 0, max = 16) {
         const gradientColors = [];
         for (let i = 0; i <= 100; i += 5) {
-            gradientColors.push(getViridisColor(min + (i/100)*(max-min), min, max));
+            gradientColors.push(getCFDColor(min + (i/100)*(max-min), min, max));
         }
         
         const labels = [max, max*0.75, max*0.5, max*0.25, min];
@@ -1130,11 +1008,6 @@ function initAdvancedWindVisualization() {
     const animationLayer = new AdvancedWindAnimationLayer(windData, windData.bounds);
     const legendControl = new AdvancedLegendControl();
     const controlPanel = new AdvancedWindControlPanel();
-    const statsPanel = new WindStatisticsPanel({
-        flow_statistics: windSimulationData.flow_statistics,
-        metadata: windSimulationData.metadata,
-        performance: windSimulationData.performance
-    });
     
     velocityLayer.addTo(maps.wind);
     streamlineLayer.addTo(maps.wind);
@@ -1142,7 +1015,6 @@ function initAdvancedWindVisualization() {
     legendControl.addTo(maps.wind);
     legendControl.update(windData.minMagnitude, windData.maxMagnitude);
     controlPanel.addTo(maps.wind);
-    statsPanel.addTo(maps.wind);
     
     maps.wind.fitBounds(windData.bounds);
     
@@ -1151,13 +1023,11 @@ function initAdvancedWindVisualization() {
         streamline: streamlineLayer,
         animation: animationLayer,
         legend: legendControl,
-        control: controlPanel,
-        stats: statsPanel
+        control: controlPanel
     };
     
     console.log('✅ Wizualizacja wiatru zainicjalizowana');
 }
-
 
 // ============================================================================
 // MODUŁ 7: STYLE CSS
