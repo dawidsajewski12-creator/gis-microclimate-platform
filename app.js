@@ -4,13 +4,13 @@
 
 // Konfiguracja wizualizacji wiatru
 const WIND_VIZ_CONFIG = {
-    PARTICLE_COUNT: 600,
-    PARTICLE_SPEED_SCALE: 0.4,
-    PARTICLE_LIFESPAN: 300,  // KRÓCEJ - szybko znikają (było 400)
-    PARTICLE_LINE_WIDTH: 1.0,
+    PARTICLE_COUNT: 6000,
+    PARTICLE_SPEED_SCALE: 0.2,
+    PARTICLE_LIFESPAN: 1000,  // KRÓCEJ - szybko znikają (było 400)
+    PARTICLE_LINE_WIDTH: 1.6,
     PARTICLE_COLOR: "rgba(255, 255, 255, 0.35)",
     GLOW_COLOR: "rgba(200, 220, 255, 0.2)",
-    GLOW_BLUR: 3,
+    GLOW_BLUR: 7,
     STREAMLINE_COUNT: 50,
     STREAMLINE_STEPS: 100,
     STREAMLINE_COLOR: "rgba(80, 100, 130, 0.5)",
