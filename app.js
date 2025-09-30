@@ -14,10 +14,23 @@ const WIND_VIZ_CONFIG = {
     STREAMLINE_COUNT: 50,
     STREAMLINE_STEPS: 100,
     STREAMLINE_COLOR: "rgba(80, 100, 130, 0.5)",
-    STREAMLINE_WIDTH: 1.5
+    STREAMLINE_WIDTH: 1.5,
+    // Nowe opcje
+    SHOW_VECTORS: false,
+    SHOW_STATISTICS: true,
+    SHOW_HEATMAP: true,
+    SHOW_STREAMLINES: true,
+    SHOW_PARTICLES: true
 };
 
 let windSimulationData = null;
+let windVisualizationState = {
+    activeLayer: 'all',
+    selectedPoint: null,
+    hoveredPoint: null,
+    measurementMode: false,
+    measurementPoints: []
+};
 
 // Sample data dla portfolio, blog, etc.
 const sampleData = {
@@ -488,7 +501,6 @@ const StreamlineLayer = L.Layer.extend({
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
-        // Opcjonalny efekt glow
         ctx.shadowColor = WIND_VIZ_CONFIG.STREAMLINE_COLOR;
         ctx.shadowBlur = 3;
         
@@ -507,12 +519,11 @@ const StreamlineLayer = L.Layer.extend({
             ctx.stroke();
         });
         
-        // Resetuj shadow
         ctx.shadowBlur = 0;
     }
 });
 
-// === WindAnimationLayer - Warstwa animacji cząstek (POPRAWIONA) ===
+// === WindAnimationLayer - Warstwa animacji cząstek ===
 const AdvancedWindAnimationLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
@@ -566,16 +577,13 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
             return;
         }
         
-        // UŻYJ vector_field do generowania cząstek
         const vectorField = this._data.vectorField;
         const particleCount = Math.min(WIND_VIZ_CONFIG.PARTICLE_COUNT, vectorField.length * 2);
         
         for (let i = 0; i < particleCount; i++) {
-            // Wybierz losowy punkt z vector_field
             const vectorPoint = vectorField[Math.floor(Math.random() * vectorField.length)];
             const point = this._map.latLngToContainerPoint([vectorPoint.lat, vectorPoint.lng]);
             
-            // Sprawdź czy punkt jest w widoku
             if (point.x >= 0 && point.x < this._canvas.width && 
                 point.y >= 0 && point.y < this._canvas.height) {
                 this._particles.push({
@@ -594,7 +602,6 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
     },
     
     _getVectorAtPosition: function(lat, lng) {
-        // Znajdź najbliższy punkt w vector_field
         let closest = null;
         let minDist = Infinity;
         
@@ -619,27 +626,22 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
             const oldX = particle.x;
             const oldY = particle.y;
             
-            // Aktualizuj pozycję używając prędkości z vector_field
             particle.x += particle.vx;
             particle.y += particle.vy;
             particle.age++;
             
-            // Konwertuj pozycję na współrzędne geograficzne
             const latLng = this._map.containerPointToLatLng([particle.x, particle.y]);
             
-            // Pobierz nowy wektor w tej pozycji
             const newVector = this._getVectorAtPosition(latLng.lat, latLng.lng);
             if (newVector) {
                 particle.vx = newVector.vx * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE;
                 particle.vy = -newVector.vy * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE;
             }
             
-            // Resetuj cząstkę jeśli wyszła poza obszar lub jest za stara
             if (particle.x < 0 || particle.x > this._canvas.width || 
                 particle.y < 0 || particle.y > this._canvas.height || 
                 particle.age > WIND_VIZ_CONFIG.PARTICLE_LIFESPAN) {
                 
-                // Zrestartuj z nowego punktu z vector_field
                 const vectorPoint = this._data.vectorField[
                     Math.floor(Math.random() * this._data.vectorField.length)
                 ];
@@ -653,7 +655,6 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
                 return;
             }
             
-            // Narysuj ślad cząstki
             const alpha = Math.max(0, 1 - particle.age / WIND_VIZ_CONFIG.PARTICLE_LIFESPAN);
             this._ctx.strokeStyle = WIND_VIZ_CONFIG.PARTICLE_COLOR.replace('0.7', (alpha * 0.7).toString());
             this._ctx.beginPath();
@@ -666,7 +667,369 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
     }
 });
 
-// === LegendControl - Kontrolka legendy ===
+// === AdvancedWindControlPanel - Panel sterowania ===
+const AdvancedWindControlPanel = L.Control.extend({
+    options: {
+        position: 'topleft'
+    },
+    
+    onAdd: function(map) {
+        this._map = map;
+        this._container = L.DomUtil.create('div', 'leaflet-control wind-control-panel');
+        this._container.style.background = 'rgba(30, 35, 45, 0.95)';
+        this._container.style.padding = '15px';
+        this._container.style.borderRadius = '8px';
+        this._container.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+        this._container.style.minWidth = '280px';
+        this._container.style.maxHeight = '85vh';
+        this._container.style.overflowY = 'auto';
+        
+        this._render();
+        return this._container;
+    },
+    
+    _render: function() {
+        this._container.innerHTML = `
+            <div style="color: #e0e0e0;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600;">
+                        <span style="margin-right: 8px;">🎛️</span>
+                        Kontrola Wizualizacji
+                    </h3>
+                    <button id="collapse-panel" style="background: transparent; border: none; color: #9ca3af; cursor: pointer; font-size: 18px;">
+                        ▲
+                    </button>
+                </div>
+                
+                <div id="panel-content">
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Warstwy
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 8px; border-radius: 6px; transition: background 0.2s;">
+                                <input type="checkbox" id="toggle-heatmap" checked style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 14px; font-weight: 500;">Mapa cieplna</div>
+                                    <div style="font-size: 11px; color: #9ca3af;">Pole prędkości wiatru</div>
+                                </div>
+                            </label>
+                            
+                            <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 8px; border-radius: 6px; transition: background 0.2s;">
+                                <input type="checkbox" id="toggle-streamlines" checked style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 14px; font-weight: 500;">Linie przepływu</div>
+                                    <div style="font-size: 11px; color: #9ca3af;">Ścieżki wiatru</div>
+                                </div>
+                            </label>
+                            
+                            <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 8px; border-radius: 6px; transition: background 0.2s;">
+                                <input type="checkbox" id="toggle-particles" checked style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 14px; font-weight: 500;">Animacja cząstek</div>
+                                    <div style="font-size: 11px; color: #9ca3af;">Dynamiczny przepływ</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Narzędzia
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <button id="tool-measure" class="tool-button" style="display: flex; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; background: rgba(96, 165, 250, 0.1); color: #e0e0e0; cursor: pointer; transition: all 0.2s;">
+                                <span style="margin-right: 10px;">📏</span>
+                                <span style="font-size: 13px;">Pomiar odległości</span>
+                            </button>
+                            
+                            <button id="tool-probe" class="tool-button" style="display: flex; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; background: rgba(96, 165, 250, 0.1); color: #e0e0e0; cursor: pointer; transition: all 0.2s;">
+                                <span style="margin-right: 10px;">🎯</span>
+                                <span style="font-size: 13px;">Odczyt wartości</span>
+                            </button>
+                            
+                            <button id="tool-export" class="tool-button" style="display: flex; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; background: rgba(96, 165, 250, 0.1); color: #e0e0e0; cursor: pointer; transition: all 0.2s;">
+                                <span style="margin-right: 10px;">💾</span>
+                                <span style="font-size: 13px;">Eksport danych</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Intensywność
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="range" id="opacity-slider" min="0" max="100" value="70" style="flex: 1; cursor: pointer;">
+                            <span id="opacity-value" style="min-width: 35px; font-size: 13px;">70%</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Gęstość cząstek
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="range" id="particle-density-slider" min="500" max="5000" step="500" value="2000" style="flex: 1; cursor: pointer;">
+                            <span id="particle-density-value" style="min-width: 45px; font-size: 13px;">2000</span>
+                        </div>
+                    </div>
+                    
+                    <button id="reset-view" style="width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; color: #fca5a5; cursor: pointer; font-size: 13px; transition: all 0.2s;">
+                        <span style="margin-right: 8px;">🔄</span>
+                        Resetuj widok
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        this._attachEventListeners();
+    },
+    
+    _attachEventListeners: function() {
+        const collapseBtn = this._container.querySelector('#collapse-panel');
+        const content = this._container.querySelector('#panel-content');
+        collapseBtn.addEventListener('click', () => {
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
+            collapseBtn.textContent = content.style.display === 'none' ? '▼' : '▲';
+        });
+        
+        this._container.querySelector('#toggle-heatmap').addEventListener('change', (e) => {
+            this._toggleLayer('velocity', e.target.checked);
+        });
+        
+        this._container.querySelector('#toggle-streamlines').addEventListener('change', (e) => {
+            this._toggleLayer('streamline', e.target.checked);
+        });
+        
+        this._container.querySelector('#toggle-particles').addEventListener('change', (e) => {
+            this._toggleLayer('animation', e.target.checked);
+        });
+        
+        this._container.querySelector('#opacity-slider').addEventListener('input', (e) => {
+            const value = e.target.value;
+            this._container.querySelector('#opacity-value').textContent = value + '%';
+            this._updateOpacity(value / 100);
+        });
+        
+        this._container.querySelector('#particle-density-slider').addEventListener('input', (e) => {
+            const value = e.target.value;
+            this._container.querySelector('#particle-density-value').textContent = value;
+            this._updateParticleDensity(parseInt(value));
+        });
+        
+        this._container.querySelector('#tool-measure').addEventListener('click', () => {
+            alert('Narzędzie pomiaru: Kliknij dwa punkty na mapie aby zmierzyć odległość');
+        });
+        
+        this._container.querySelector('#tool-probe').addEventListener('click', () => {
+            alert('Narzędzie odczytu: Kliknij punkt na mapie aby odczytać wartości wiatru');
+        });
+        
+        this._container.querySelector('#tool-export').addEventListener('click', () => {
+            this._exportData();
+        });
+        
+        this._container.querySelector('#reset-view').addEventListener('click', () => {
+            this._resetView();
+        });
+        
+        this._container.querySelectorAll('.layer-toggle').forEach(label => {
+            label.addEventListener('mouseenter', () => {
+                label.style.background = 'rgba(96, 165, 250, 0.1)';
+            });
+            label.addEventListener('mouseleave', () => {
+                label.style.background = 'transparent';
+            });
+        });
+        
+        this._container.querySelectorAll('.tool-button').forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                btn.style.background = 'rgba(96, 165, 250, 0.2)';
+                btn.style.borderColor = 'rgba(96, 165, 250, 0.4)';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.background = 'rgba(96, 165, 250, 0.1)';
+                btn.style.borderColor = 'rgba(255,255,255,0.1)';
+            });
+        });
+    },
+    
+    _toggleLayer: function(layerName, visible) {
+        if (window.advancedWindLayers && window.advancedWindLayers[layerName]) {
+            const layer = window.advancedWindLayers[layerName];
+            if (visible && !this._map.hasLayer(layer)) {
+                layer.addTo(this._map);
+            } else if (!visible && this._map.hasLayer(layer)) {
+                this._map.removeLayer(layer);
+            }
+        }
+    },
+    
+    _updateOpacity: function(opacity) {
+        if (window.advancedWindLayers) {
+            const velocity = window.advancedWindLayers.velocity;
+            const streamline = window.advancedWindLayers.streamline;
+            
+            if (velocity && velocity._canvas) {
+                velocity._canvas.style.opacity = opacity;
+            }
+            if (streamline && streamline._canvas) {
+                streamline._canvas.style.opacity = opacity * 0.8;
+            }
+        }
+    },
+    
+    _updateParticleDensity: function(density) {
+        WIND_VIZ_CONFIG.PARTICLE_COUNT = density;
+        if (window.advancedWindLayers && window.advancedWindLayers.animation) {
+            window.advancedWindLayers.animation._initializeParticles();
+        }
+    },
+    
+    _exportData: function() {
+        if (!windSimulationData) return;
+        
+        const dataStr = JSON.stringify(windSimulationData, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `wind_simulation_${new Date().getTime()}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+    },
+    
+    _resetView: function() {
+        if (window.advancedWindLayers && windSimulationData) {
+            const windData = createWindDataAdapter(windSimulationData);
+            if (windData) {
+                this._map.fitBounds(windData.bounds);
+            }
+        }
+    }
+});
+
+// === WindStatisticsPanel - Panel statystyk ===
+const WindStatisticsPanel = L.Control.extend({
+    options: {
+        position: 'topright'
+    },
+    
+    initialize: function(data, options) {
+        L.Control.prototype.initialize.call(this, options);
+        this._data = data;
+    },
+    
+    onAdd: function(map) {
+        this._map = map;
+        this._container = L.DomUtil.create('div', 'leaflet-control wind-stats-panel');
+        this._container.style.background = 'rgba(30, 35, 45, 0.95)';
+        this._container.style.padding = '15px';
+        this._container.style.borderRadius = '8px';
+        this._container.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+        this._container.style.minWidth = '320px';
+        this._container.style.color = '#e0e0e0';
+        
+        this._render();
+        return this._container;
+    },
+    
+    _render: function() {
+        const stats = this._data.flow_statistics || {};
+        const metadata = this._data.metadata || {};
+        const performance = this._data.performance || {};
+        
+        this._container.innerHTML = `
+            <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600;">
+                        <span style="margin-right: 8px;">📊</span>
+                        Statystyki Symulacji
+                    </h3>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                    <div class="kpi-card" style="background: linear-gradient(135deg, rgba(96, 165, 250, 0.2), rgba(59, 130, 246, 0.1)); padding: 12px; border-radius: 6px; border: 1px solid rgba(96, 165, 250, 0.3);">
+                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Max</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #60a5fa;">${stats.max_magnitude?.toFixed(2) || 'N/A'}</div>
+                        <div style="font-size: 11px; color: #9ca3af;">m/s</div>
+                    </div>
+                    
+                    <div class="kpi-card" style="background: linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(16, 185, 129, 0.1)); padding: 12px; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.3);">
+                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Średnia</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #34d399;">${stats.mean_magnitude?.toFixed(2) || 'N/A'}</div>
+                        <div style="font-size: 11px; color: #9ca3af;">m/s</div>
+                    </div>
+                    
+                    <div class="kpi-card" style="background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.1)); padding: 12px; border-radius: 6px; border: 1px solid rgba(251, 191, 36, 0.3);">
+                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Mediana</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #fbbf24;">${stats.median_magnitude?.toFixed(2) || 'N/A'}</div>
+                        <div style="font-size: 11px; color: #9ca3af;">m/s</div>
+                    </div>
+                    
+                    <div class="kpi-card" style="background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(139, 92, 246, 0.1)); padding: 12px; border-radius: 6px; border: 1px solid rgba(167, 139, 250, 0.3);">
+                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Odch. std.</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #a78bfa;">${stats.std_magnitude?.toFixed(2) || 'N/A'}</div>
+                        <div style="font-size: 11px; color: #9ca3af;">m/s</div>
+                    </div>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 12px; margin-bottom: 15px;">
+                    <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px; color: #9ca3af;">Rozkład percentylowy</div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        ${this._createStatRow('95%', stats.percentile_95?.toFixed(2), 'm/s')}
+                        ${this._createStatRow('75%', stats.percentile_75?.toFixed(2), 'm/s')}
+                        ${this._createStatRow('25%', stats.percentile_25?.toFixed(2), 'm/s')}
+                        ${this._createStatRow('5%', stats.percentile_05?.toFixed(2), 'm/s')}
+                    </div>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 12px; margin-bottom: 15px;">
+                    <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px; color: #9ca3af;">Metryki zaawansowane</div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        ${this._createStatRow('Wirowość średnia', stats.mean_vorticity?.toFixed(3), '1/s')}
+                        ${this._createStatRow('Intensywność turbulencji', stats.turbulence_intensity?.toFixed(3), '-')}
+                    </div>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 12px;">
+                    <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px; color: #9ca3af;">Wydajność obliczeń</div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        ${this._createStatRow('Czas symulacji', performance.simulation_time?.toFixed(1), 's')}
+                        ${this._createStatRow('Iteracje/s', performance.iterations_per_second?.toFixed(1), '')}
+                        ${this._createStatRow('Komórki/s', this._formatNumber(performance.grid_cells_per_second), '')}
+                    </div>
+                </div>
+                
+                ${metadata.timestamp ? `
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: #6b7280; text-align: center;">
+                    <span style="margin-right: 4px;">🕒</span>
+                    ${new Date(metadata.timestamp * 1000).toLocaleString('pl-PL')}
+                </div>
+                ` : ''}
+            </div>
+        `;
+    },
+    
+    _createStatRow: function(label, value, unit) {
+        return `
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+                <span style="color: #9ca3af;">${label}</span>
+                <span style="font-weight: 600; color: #e0e0e0;">${value || 'N/A'} <span style="color: #6b7280; font-size: 11px;">${unit}</span></span>
+            </div>
+        `;
+    },
+    
+    _formatNumber: function(num) {
+        if (!num) return 'N/A';
+        if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+        if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+        return num.toFixed(0);
+    }
+});
+
+// === AdvancedLegendControl - Ulepszona legenda ===
 const AdvancedLegendControl = L.Control.extend({
     options: {
         position: 'bottomright'
@@ -680,29 +1043,59 @@ const AdvancedLegendControl = L.Control.extend({
     
     update: function(min = 0, max = 16) {
         const gradientColors = [];
-        for (let i = 0; i <= 100; i += 10) {
+        for (let i = 0; i <= 100; i += 5) {
             gradientColors.push(getViridisColor(min + (i/100)*(max-min), min, max));
         }
         
+        const labels = [max, max*0.75, max*0.5, max*0.25, min];
+        
         this._container.innerHTML = `
-            <div style="background: rgba(30, 35, 45, 0.9); padding: 10px; border-radius: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.5);">
-                <div style="font-weight: bold; margin-bottom: 5px; color: #e0e0e0;">Prędkość wiatru (m/s)</div>
-                <div style="display: flex; align-items: center;">
-                    <div style="
-                        width: 20px; 
-                        height: 150px; 
-                        background: linear-gradient(to top, ${gradientColors.join(', ')});
-                        margin-right: 10px;
-                        border: 1px solid #555;">
+            <div style="background: rgba(30, 35, 45, 0.95); padding: 15px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <div style="font-weight: 600; font-size: 13px; color: #e0e0e0;">
+                        <span style="margin-right: 6px;">🌬️</span>
+                        Prędkość wiatru
                     </div>
-                    <div style="display: flex; flex-direction: column; justify-content: space-between; height: 150px; color: #e0e0e0;">
-                        <span>${max.toFixed(1)}</span>
-                        <span>${((max-min)/2 + min).toFixed(1)}</span>
-                        <span>${min.toFixed(1)}</span>
+                    <div style="font-size: 11px; color: #9ca3af;">m/s</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="
+                        width: 24px; 
+                        height: 180px; 
+                        background: linear-gradient(to top, ${gradientColors.join(', ')});
+                        border-radius: 4px;
+                        border: 1px solid rgba(255,255,255,0.2);
+                        box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);">
+                    </div>
+                    <div style="display: flex; flex-direction: column; justify-content: space-between; height: 180px; color: #e0e0e0; font-size: 12px; font-weight: 500;">
+                        ${labels.map(val => `<span style="line-height: 1;">${val.toFixed(1)}</span>`).join('')}
+                    </div>
+                </div>
+                
+                <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size: 11px; color: #9ca3af; margin-bottom: 6px;">Skala Beauforta</div>
+                    <div style="font-size: 11px; color: #e0e0e0; line-height: 1.5;">
+                        ${this._getBeaufortDescription(max)}
                     </div>
                 </div>
             </div>
         `;
+    },
+    
+    _getBeaufortDescription: function(maxSpeed) {
+        if (maxSpeed < 0.5) return '0 - Cisza';
+        if (maxSpeed < 1.5) return '1 - Powiew';
+        if (maxSpeed < 3.3) return '2 - Lekki wiatr';
+        if (maxSpeed < 5.5) return '3 - Słaby wiatr';
+        if (maxSpeed < 7.9) return '4 - Umiarkowany';
+        if (maxSpeed < 10.7) return '5 - Dość silny';
+        if (maxSpeed < 13.8) return '6 - Silny wiatr';
+        if (maxSpeed < 17.1) return '7 - Bardzo silny';
+        if (maxSpeed < 20.7) return '8 - Wichura';
+        if (maxSpeed < 24.4) return '9 - Silna wichura';
+        if (maxSpeed < 28.4) return '10 - Sztorm';
+        if (maxSpeed < 32.6) return '11 - Gwałtowny sztorm';
+        return '12 - Huragan';
     }
 });
 
@@ -718,14 +1111,12 @@ function initAdvancedWindVisualization() {
     
     console.log('🚀 Inicjalizacja zaawansowanej wizualizacji wiatru...');
     
-    // Przygotuj dane
     const windData = createWindDataAdapter(windSimulationData);
     if (!windData) {
         console.error('❌ Nie udało się przygotować danych');
         return;
     }
     
-    // Usuń poprzednie warstwy jeśli istnieją
     if (window.advancedWindLayers) {
         Object.values(window.advancedWindLayers).forEach(layer => {
             if (layer && maps.wind.hasLayer(layer)) {
@@ -734,32 +1125,39 @@ function initAdvancedWindVisualization() {
         });
     }
     
-    // Utwórz warstwy
     const velocityLayer = new AdvancedVelocityLayer(windData, windData.bounds);
     const streamlineLayer = new StreamlineLayer(windData, windData.bounds);
     const animationLayer = new AdvancedWindAnimationLayer(windData, windData.bounds);
     const legendControl = new AdvancedLegendControl();
+    const controlPanel = new AdvancedWindControlPanel();
+    const statsPanel = new WindStatisticsPanel({
+        flow_statistics: windSimulationData.flow_statistics,
+        metadata: windSimulationData.metadata,
+        performance: windSimulationData.performance
+    });
     
-    // Dodaj do mapy
     velocityLayer.addTo(maps.wind);
     streamlineLayer.addTo(maps.wind);
     animationLayer.addTo(maps.wind);
     legendControl.addTo(maps.wind);
     legendControl.update(windData.minMagnitude, windData.maxMagnitude);
+    controlPanel.addTo(maps.wind);
+    statsPanel.addTo(maps.wind);
     
-    // Dopasuj widok
     maps.wind.fitBounds(windData.bounds);
     
-    // Zapisz referencje
     window.advancedWindLayers = {
         velocity: velocityLayer,
         streamline: streamlineLayer,
         animation: animationLayer,
-        legend: legendControl
+        legend: legendControl,
+        control: controlPanel,
+        stats: statsPanel
     };
     
     console.log('✅ Wizualizacja wiatru zainicjalizowana');
 }
+
 
 // ============================================================================
 // MODUŁ 7: STYLE CSS
