@@ -4,13 +4,13 @@
 
 // Konfiguracja wizualizacji wiatru
 const WIND_VIZ_CONFIG = {
-    PARTICLE_COUNT: 800,  // ZMNIEJSZONE Z 2000 dla wydajności
-    PARTICLE_SPEED_SCALE: 0.3,
-    PARTICLE_LIFESPAN: 800,
-    PARTICLE_LINE_WIDTH: 1.2,
-    PARTICLE_COLOR: "rgba(65, 85, 110, 0.7)",
-    GLOW_COLOR: "rgba(65, 85, 110, 0.4)",
-    GLOW_BLUR: 5,
+    PARTICLE_COUNT: 600,
+    PARTICLE_SPEED_SCALE: 0.4,
+    PARTICLE_LIFESPAN: 400,  // KRÓTSZE - było 800
+    PARTICLE_LINE_WIDTH: 1.0,  // CIEŃSZE - było 1.2
+    PARTICLE_COLOR: "rgba(255, 255, 255, 0.35)",  // BARDZIEJ SUBTELNE
+    GLOW_COLOR: "rgba(200, 220, 255, 0.2)",
+    GLOW_BLUR: 3,
     STREAMLINE_COUNT: 50,
     STREAMLINE_STEPS: 100,
     STREAMLINE_COLOR: "rgba(80, 100, 130, 0.5)",
@@ -21,6 +21,7 @@ const WIND_VIZ_CONFIG = {
     SHOW_STREAMLINES: true,
     SHOW_PARTICLES: true
 };
+
 
 
 let windSimulationData = null;
@@ -415,10 +416,10 @@ function createWindDataAdapter(rawWindData) {
 }
 
 // ============================================================================
-// MODUŁ 5: WARSTWY WIZUALIZACJI (ZOPTYMALIZOWANE)
+// MODUŁ 5: WARSTWY WIZUALIZACJI
 // ============================================================================
 
-// === VelocityLayer - Warstwa pola prędkości ===
+// === VelocityLayer - Warstwa pola prędkości (NA SPODZIE) ===
 const AdvancedVelocityLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
@@ -429,7 +430,6 @@ const AdvancedVelocityLayer = L.Layer.extend({
         this._map = map;
         this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated velocity-canvas');
         this._canvas.style.position = 'absolute';
-        this._canvas.style.zIndex = '1';  // NA WIERZCHU
         map.getPanes().overlayPane.appendChild(this._canvas);
         this._ctx = this._canvas.getContext('2d');
         
@@ -485,11 +485,12 @@ const AdvancedVelocityLayer = L.Layer.extend({
     }
 });
 
-// === StreamlineLayer - Warstwa linii przepływu ===
+// === StreamlineLayer - KRÓTKIE STRZAŁKI PRZEPŁYWU (W ŚRODKU) ===
 const StreamlineLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
         this.bounds = bounds;
+        this._arrows = [];
     },
     
     onAdd: function(map) {
@@ -497,9 +498,10 @@ const StreamlineLayer = L.Layer.extend({
         this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated streamline-canvas');
         this._canvas.style.position = 'absolute';
         this._canvas.style.pointerEvents = 'none';
-        this._canvas.style.zIndex = '2';  // W ŚRODKU
         map.getPanes().overlayPane.appendChild(this._canvas);
         this._ctx = this._canvas.getContext('2d');
+        
+        this._generateArrows();
         
         map.on('moveend zoomend resize', this._reset, this);
         this._reset();
@@ -508,6 +510,28 @@ const StreamlineLayer = L.Layer.extend({
     onRemove: function(map) {
         map.getPanes().overlayPane.removeChild(this._canvas);
         map.off('moveend zoomend resize', this._reset, this);
+    },
+    
+    _generateArrows: function() {
+        if (!this._data.vectorField || this._data.vectorField.length === 0) return;
+        
+        this._arrows = [];
+        const step = Math.max(1, Math.floor(this._data.vectorField.length / 150)); // Maksymalnie 150 strzałek
+        
+        for (let i = 0; i < this._data.vectorField.length; i += step) {
+            const vector = this._data.vectorField[i];
+            if (vector.magnitude > 0.5) { // Tylko widoczne wektory
+                this._arrows.push({
+                    lat: vector.lat,
+                    lng: vector.lng,
+                    vx: vector.vx,
+                    vy: vector.vy,
+                    magnitude: vector.magnitude
+                });
+            }
+        }
+        
+        console.log(`✅ Wygenerowano ${this._arrows.length} strzałek przepływu`);
     },
     
     _reset: function() {
@@ -524,39 +548,68 @@ const StreamlineLayer = L.Layer.extend({
     },
     
     _draw: function() {
-        if (!this._data.streamlines || this._data.streamlines.length === 0) return;
+        if (!this._arrows || this._arrows.length === 0) return;
         
         const ctx = this._ctx;
         ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
         
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
-        ctx.shadowBlur = 4;
-        
-        this._data.streamlines.forEach(streamline => {
-            if (streamline.length < 2) return;
+        this._arrows.forEach(arrow => {
+            const point = this._map.latLngToContainerPoint([arrow.lat, arrow.lng]);
             
-            ctx.beginPath();
-            const firstPoint = this._map.latLngToContainerPoint([streamline[0].lat, streamline[0].lng]);
-            ctx.moveTo(firstPoint.x, firstPoint.y);
-            
-            for (let i = 1; i < streamline.length; i++) {
-                const point = this._map.latLngToContainerPoint([streamline[i].lat, streamline[i].lng]);
-                ctx.lineTo(point.x, point.y);
+            // Sprawdź czy strzałka jest w widoku
+            if (point.x < -50 || point.x > this._canvas.width + 50 || 
+                point.y < -50 || point.y > this._canvas.height + 50) {
+                return;
             }
             
+            // Normalizuj wektor
+            const length = Math.sqrt(arrow.vx * arrow.vx + arrow.vy * arrow.vy);
+            if (length === 0) return;
+            
+            const nx = arrow.vx / length;
+            const ny = -arrow.vy / length; // Odwróć Y
+            
+            // Długość strzałki zależna od prędkości (8-20px)
+            const arrowLength = Math.min(20, 8 + arrow.magnitude * 1.5);
+            
+            // Punkt końcowy
+            const endX = point.x + nx * arrowLength;
+            const endY = point.y + ny * arrowLength;
+            
+            // Rysuj linię strzałki
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+            ctx.lineWidth = 1.8;
+            ctx.lineCap = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(point.x, point.y);
+            ctx.lineTo(endX, endY);
             ctx.stroke();
+            
+            // Rysuj grot strzałki
+            const arrowHeadLength = 4;
+            const arrowHeadAngle = Math.PI / 6; // 30 stopni
+            
+            const angle = Math.atan2(ny, nx);
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(
+                endX - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
+                endY - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
+            );
+            ctx.lineTo(
+                endX - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
+                endY - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
+            );
+            ctx.closePath();
+            ctx.fill();
         });
-        
-        ctx.shadowBlur = 0;
     }
 });
 
-// === WindAnimationLayer - ZOPTYMALIZOWANA warstwa animacji cząstek ===
+// === WindAnimationLayer - SUBTELNE KRÓTKIE CZĄSTKI (NA WIERZCHU) ===
 const AdvancedWindAnimationLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
@@ -564,7 +617,7 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
         this._particles = [];
         this._animationFrame = null;
         this._lastFrameTime = 0;
-        this._frameInterval = 1000 / 30; // 30 FPS dla wydajności
+        this._frameInterval = 1000 / 30;
     },
     
     onAdd: function(map) {
@@ -573,11 +626,9 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
         this._canvas.id = 'wind-canvas';
         this._canvas.style.position = 'absolute';
         this._canvas.style.pointerEvents = 'none';
-        this._canvas.style.zIndex = '3';  // NA SAMYM WIERZCHU
         map.getPanes().overlayPane.appendChild(this._canvas);
         this._ctx = this._canvas.getContext('2d');
         
-        // Optymalizacje canvas
         this._ctx.imageSmoothingEnabled = false;
         
         map.on('moveend zoomend resize', this._reset, this);
@@ -619,7 +670,6 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
         const vectorField = this._data.vectorField;
         const particleCount = Math.min(WIND_VIZ_CONFIG.PARTICLE_COUNT, vectorField.length);
         
-        // Buforuj mapę wektorów dla szybkiego dostępu
         this._vectorMap = new Map();
         vectorField.forEach(v => {
             const key = `${Math.round(v.lat * 1000)}_${Math.round(v.lng * 1000)}`;
@@ -644,7 +694,7 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
             }
         }
         
-        console.log(`✅ Zainicjalizowano ${this._particles.length} cząstek (zoptymalizowane)`);
+        console.log(`✅ Zainicjalizowano ${this._particles.length} subtelnych cząstek`);
     },
     
     _getVectorAtPosition: function(lat, lng) {
@@ -655,21 +705,15 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
     _animate: function(currentTime) {
         this._animationFrame = requestAnimationFrame((time) => this._animate(time));
         
-        // Kontrola FPS
         const elapsed = currentTime - this._lastFrameTime;
         if (elapsed < this._frameInterval) {
             return;
         }
         this._lastFrameTime = currentTime - (elapsed % this._frameInterval);
         
-        // Efekt zanikania - tylko co kilka klatek dla wydajności
-        this._ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+        // Szybsze zanikanie dla krótszych śladów
+        this._ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
         this._ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
-        
-        this._ctx.globalCompositeOperation = 'lighter';
-        
-        // Batch rendering dla wydajności
-        this._ctx.beginPath();
         
         this._particles.forEach((particle, index) => {
             const oldX = particle.x;
@@ -679,7 +723,6 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
             particle.y += particle.vy;
             particle.age++;
             
-            // Aktualizuj współrzędne geograficzne co 3 klatki dla wydajności
             if (index % 3 === 0) {
                 const latLng = this._map.containerPointToLatLng([particle.x, particle.y]);
                 const newVector = this._getVectorAtPosition(latLng.lat, latLng.lng);
@@ -707,29 +750,25 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
                 return;
             }
             
-            const alpha = Math.max(0.5, 1 - particle.age / WIND_VIZ_CONFIG.PARTICLE_LIFESPAN);
+            // Subtelniejsze cząstki z szybszym zanikiem
+            const alpha = Math.max(0.2, 1 - particle.age / WIND_VIZ_CONFIG.PARTICLE_LIFESPAN);
             
-            // Rysuj linię cząstki
-            this._ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-            this._ctx.lineWidth = 2.5;
-            this._ctx.shadowColor = `rgba(200, 220, 255, ${alpha * 0.7})`;
-            this._ctx.shadowBlur = 5;
+            this._ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.35})`;
+            this._ctx.lineWidth = 1.0;
+            this._ctx.shadowColor = `rgba(200, 220, 255, ${alpha * 0.15})`;
+            this._ctx.shadowBlur = 2;
             
+            this._ctx.beginPath();
             this._ctx.moveTo(oldX, oldY);
             this._ctx.lineTo(particle.x, particle.y);
-            
-            // Punkt na końcu
-            this._ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
-            this._ctx.arc(particle.x, particle.y, 1.5, 0, Math.PI * 2);
+            this._ctx.stroke();
         });
         
-        this._ctx.stroke();
-        this._ctx.fill();
         this._ctx.shadowBlur = 0;
     }
 });
 
-// === AdvancedWindControlPanel - Panel sterowania (KOMPAKTOWY) ===
+// === Panel sterowania (bez zmian) ===
 const AdvancedWindControlPanel = L.Control.extend({
     options: {
         position: 'topleft'
@@ -781,8 +820,8 @@ const AdvancedWindControlPanel = L.Control.extend({
                             <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 6px; border-radius: 5px; transition: background 0.2s;">
                                 <input type="checkbox" id="toggle-streamlines" checked style="margin-right: 8px; width: 14px; height: 14px; cursor: pointer;">
                                 <div style="flex: 1;">
-                                    <div style="font-size: 13px; font-weight: 500;">Linie przepływu</div>
-                                    <div style="font-size: 10px; color: #9ca3af;">Ścieżki wiatru</div>
+                                    <div style="font-size: 13px; font-weight: 500;">Strzałki przepływu</div>
+                                    <div style="font-size: 10px; color: #9ca3af;">Kierunek wiatru</div>
                                 </div>
                             </label>
                             
@@ -811,8 +850,8 @@ const AdvancedWindControlPanel = L.Control.extend({
                             Gęstość cząstek
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <input type="range" id="particle-density-slider" min="200" max="2000" step="200" value="800" style="flex: 1; cursor: pointer;">
-                            <span id="particle-density-value" style="min-width: 38px; font-size: 12px;">800</span>
+                            <input type="range" id="particle-density-slider" min="200" max="2000" step="200" value="600" style="flex: 1; cursor: pointer;">
+                            <span id="particle-density-value" style="min-width: 38px; font-size: 12px;">600</span>
                         </div>
                     </div>
                     
@@ -950,7 +989,7 @@ const AdvancedWindControlPanel = L.Control.extend({
     }
 });
 
-// === AdvancedLegendControl - Legenda ===
+// === Legenda (bez zmian) ===
 const AdvancedLegendControl = L.Control.extend({
     options: {
         position: 'bottomright'
@@ -1020,6 +1059,7 @@ const AdvancedLegendControl = L.Control.extend({
     }
 });
 
+
 // ============================================================================
 // MODUŁ 6: INICJALIZACJA GŁÓWNEJ WIZUALIZACJI
 // ============================================================================
@@ -1046,17 +1086,19 @@ function initAdvancedWindVisualization() {
         });
     }
     
-    // WAŻNE: Kolejność dodawania warstw (odwrotna do z-index)
+    // POPRAWNA KOLEJNOŚĆ: velocity -> streamline -> animation
+    // Kolejność WYŚWIETLANIA (wizualna): animation NA WIERZCHU, velocity NA SPODZIE
     const velocityLayer = new AdvancedVelocityLayer(windData, windData.bounds);
     const streamlineLayer = new StreamlineLayer(windData, windData.bounds);
     const animationLayer = new AdvancedWindAnimationLayer(windData, windData.bounds);
     const legendControl = new AdvancedLegendControl();
     const controlPanel = new AdvancedWindControlPanel();
     
-    // Dodaj w kolejności: heatmap -> streamlines -> particles (z-index kontroluje wyświetlanie)
-    velocityLayer.addTo(maps.wind);
-    streamlineLayer.addTo(maps.wind);
-    animationLayer.addTo(maps.wind);
+    // Dodaj od SPODU do GÓRY (ostatni jest najwyżej)
+    velocityLayer.addTo(maps.wind);      // SPÓD - mapa cieplna
+    streamlineLayer.addTo(maps.wind);    // ŚRODEK - strzałki
+    animationLayer.addTo(maps.wind);     // GÓRA - cząstki
+    
     legendControl.addTo(maps.wind);
     legendControl.update(windData.minMagnitude, windData.maxMagnitude);
     controlPanel.addTo(maps.wind);
@@ -1071,8 +1113,9 @@ function initAdvancedWindVisualization() {
         control: controlPanel
     };
     
-    console.log('✅ Wizualizacja wiatru zainicjalizowana (zoptymalizowana)');
+    console.log('✅ Wizualizacja wiatru zainicjalizowana (styl Windy.com)');
 }
+
 
 
 // ============================================================================
