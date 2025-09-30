@@ -486,7 +486,7 @@ const AdvancedVelocityLayer = L.Layer.extend({
     }
 });
 
-// === StreamlineLayer - KOLOROWE LINIE PRZEPŁYWU ZALEŻNE OD PRĘDKOŚCI ===
+// === StreamlineLayer - PRZYWRÓCONE ORYGINALNE LINIE PRZEPŁYWU (W ŚRODKU) ===
 const StreamlineLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
@@ -529,48 +529,32 @@ const StreamlineLayer = L.Layer.extend({
         const ctx = this._ctx;
         ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
         
-        const minMag = this._data.minMagnitude;
-        const maxMag = this._data.maxMagnitude;
-        
-        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
+        
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+        ctx.shadowBlur = 4;
         
         this._data.streamlines.forEach(streamline => {
             if (streamline.length < 2) return;
             
-            // Rysuj linię z gradientem kolorów
-            for (let i = 0; i < streamline.length - 1; i++) {
-                const point1 = streamline[i];
-                const point2 = streamline[i + 1];
-                
-                const pt1 = this._map.latLngToContainerPoint([point1.lat, point1.lng]);
-                const pt2 = this._map.latLngToContainerPoint([point2.lat, point2.lng]);
-                
-                // Średnia prędkość między dwoma punktami
-                const avgMagnitude = (point1.magnitude + point2.magnitude) / 2;
-                
-                // Kolor zależny od prędkości (CFD palette)
-                const color = getCFDColor(avgMagnitude, minMag, maxMag);
-                
-                // Zwiększ opacity dla lepszej widoczności
-                const enhancedColor = color.replace('0.7)', '0.9)');
-                
-                ctx.strokeStyle = enhancedColor;
-                ctx.shadowColor = enhancedColor;
-                ctx.shadowBlur = 3;
-                
-                ctx.beginPath();
-                ctx.moveTo(pt1.x, pt1.y);
-                ctx.lineTo(pt2.x, pt2.y);
-                ctx.stroke();
+            ctx.beginPath();
+            const firstPoint = this._map.latLngToContainerPoint([streamline[0].lat, streamline[0].lng]);
+            ctx.moveTo(firstPoint.x, firstPoint.y);
+            
+            for (let i = 1; i < streamline.length; i++) {
+                const point = this._map.latLngToContainerPoint([streamline[i].lat, streamline[i].lng]);
+                ctx.lineTo(point.x, point.y);
             }
+            
+            ctx.stroke();
         });
         
         ctx.shadowBlur = 0;
     }
 });
-
 
 // === WindAnimationLayer - SZYBKO ZANIKAJĄCE I POJAWIAJĄCE SIĘ CZĄSTKI (NA WIERZCHU) ===
 const AdvancedWindAnimationLayer = L.Layer.extend({
