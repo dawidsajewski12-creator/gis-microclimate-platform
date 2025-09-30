@@ -4,7 +4,7 @@
 
 // Konfiguracja wizualizacji wiatru
 const WIND_VIZ_CONFIG = {
-    PARTICLE_COUNT: 2000,
+    PARTICLE_COUNT: 800,  // ZMNIEJSZONE Z 2000 dla wydajności
     PARTICLE_SPEED_SCALE: 0.3,
     PARTICLE_LIFESPAN: 800,
     PARTICLE_LINE_WIDTH: 1.2,
@@ -15,13 +15,13 @@ const WIND_VIZ_CONFIG = {
     STREAMLINE_STEPS: 100,
     STREAMLINE_COLOR: "rgba(80, 100, 130, 0.5)",
     STREAMLINE_WIDTH: 1.5,
-    // Nowe opcje
     SHOW_VECTORS: false,
     SHOW_STATISTICS: true,
     SHOW_HEATMAP: true,
     SHOW_STREAMLINES: true,
     SHOW_PARTICLES: true
 };
+
 
 let windSimulationData = null;
 let windVisualizationState = {
@@ -415,7 +415,7 @@ function createWindDataAdapter(rawWindData) {
 }
 
 // ============================================================================
-// MODUŁ 5: WARSTWY WIZUALIZACJI
+// MODUŁ 5: WARSTWY WIZUALIZACJI (ZOPTYMALIZOWANE)
 // ============================================================================
 
 // === VelocityLayer - Warstwa pola prędkości ===
@@ -429,6 +429,7 @@ const AdvancedVelocityLayer = L.Layer.extend({
         this._map = map;
         this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated velocity-canvas');
         this._canvas.style.position = 'absolute';
+        this._canvas.style.zIndex = '1';  // NA WIERZCHU
         map.getPanes().overlayPane.appendChild(this._canvas);
         this._ctx = this._canvas.getContext('2d');
         
@@ -496,6 +497,7 @@ const StreamlineLayer = L.Layer.extend({
         this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated streamline-canvas');
         this._canvas.style.position = 'absolute';
         this._canvas.style.pointerEvents = 'none';
+        this._canvas.style.zIndex = '2';  // W ŚRODKU
         map.getPanes().overlayPane.appendChild(this._canvas);
         this._ctx = this._canvas.getContext('2d');
         
@@ -554,13 +556,15 @@ const StreamlineLayer = L.Layer.extend({
     }
 });
 
-// === WindAnimationLayer - Warstwa animacji cząstek (LEPIEJ WIDOCZNE) ===
+// === WindAnimationLayer - ZOPTYMALIZOWANA warstwa animacji cząstek ===
 const AdvancedWindAnimationLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
         this.bounds = bounds;
         this._particles = [];
         this._animationFrame = null;
+        this._lastFrameTime = 0;
+        this._frameInterval = 1000 / 30; // 30 FPS dla wydajności
     },
     
     onAdd: function(map) {
@@ -569,13 +573,17 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
         this._canvas.id = 'wind-canvas';
         this._canvas.style.position = 'absolute';
         this._canvas.style.pointerEvents = 'none';
+        this._canvas.style.zIndex = '3';  // NA SAMYM WIERZCHU
         map.getPanes().overlayPane.appendChild(this._canvas);
         this._ctx = this._canvas.getContext('2d');
+        
+        // Optymalizacje canvas
+        this._ctx.imageSmoothingEnabled = false;
         
         map.on('moveend zoomend resize', this._reset, this);
         this._reset();
         this._initializeParticles();
-        this._animate();
+        this._animate(0);
     },
     
     onRemove: function(map) {
@@ -609,7 +617,14 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
         }
         
         const vectorField = this._data.vectorField;
-        const particleCount = Math.min(WIND_VIZ_CONFIG.PARTICLE_COUNT, vectorField.length * 2);
+        const particleCount = Math.min(WIND_VIZ_CONFIG.PARTICLE_COUNT, vectorField.length);
+        
+        // Buforuj mapę wektorów dla szybkiego dostępu
+        this._vectorMap = new Map();
+        vectorField.forEach(v => {
+            const key = `${Math.round(v.lat * 1000)}_${Math.round(v.lng * 1000)}`;
+            this._vectorMap.set(key, v);
+        });
         
         for (let i = 0; i < particleCount; i++) {
             const vectorPoint = vectorField[Math.floor(Math.random() * vectorField.length)];
@@ -623,37 +638,38 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
                     vx: vectorPoint.vx * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE,
                     vy: -vectorPoint.vy * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE,
                     age: Math.random() * WIND_VIZ_CONFIG.PARTICLE_LIFESPAN,
-                    vectorLat: vectorPoint.lat,
-                    vectorLng: vectorPoint.lng
+                    lat: vectorPoint.lat,
+                    lng: vectorPoint.lng
                 });
             }
         }
         
-        console.log(`✅ Zainicjalizowano ${this._particles.length} cząstek z vector_field`);
+        console.log(`✅ Zainicjalizowano ${this._particles.length} cząstek (zoptymalizowane)`);
     },
     
     _getVectorAtPosition: function(lat, lng) {
-        let closest = null;
-        let minDist = Infinity;
-        
-        this._data.vectorField.forEach(v => {
-            const dist = Math.sqrt((v.lat - lat)**2 + (v.lng - lng)**2);
-            if (dist < minDist) {
-                minDist = dist;
-                closest = v;
-            }
-        });
-        
-        return closest;
+        const key = `${Math.round(lat * 1000)}_${Math.round(lng * 1000)}`;
+        return this._vectorMap.get(key) || null;
     },
     
-    _animate: function() {
-        // Efekt zanikania zamiast czyszczenia - pozostawia ślad
-        this._ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+    _animate: function(currentTime) {
+        this._animationFrame = requestAnimationFrame((time) => this._animate(time));
+        
+        // Kontrola FPS
+        const elapsed = currentTime - this._lastFrameTime;
+        if (elapsed < this._frameInterval) {
+            return;
+        }
+        this._lastFrameTime = currentTime - (elapsed % this._frameInterval);
+        
+        // Efekt zanikania - tylko co kilka klatek dla wydajności
+        this._ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
         this._ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
         
         this._ctx.globalCompositeOperation = 'lighter';
-        this._ctx.lineWidth = 2.5;
+        
+        // Batch rendering dla wydajności
+        this._ctx.beginPath();
         
         this._particles.forEach((particle, index) => {
             const oldX = particle.x;
@@ -663,12 +679,15 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
             particle.y += particle.vy;
             particle.age++;
             
-            const latLng = this._map.containerPointToLatLng([particle.x, particle.y]);
-            
-            const newVector = this._getVectorAtPosition(latLng.lat, latLng.lng);
-            if (newVector) {
-                particle.vx = newVector.vx * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE;
-                particle.vy = -newVector.vy * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE;
+            // Aktualizuj współrzędne geograficzne co 3 klatki dla wydajności
+            if (index % 3 === 0) {
+                const latLng = this._map.containerPointToLatLng([particle.x, particle.y]);
+                const newVector = this._getVectorAtPosition(latLng.lat, latLng.lng);
+                
+                if (newVector) {
+                    particle.vx = newVector.vx * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE;
+                    particle.vy = -newVector.vy * WIND_VIZ_CONFIG.PARTICLE_SPEED_SCALE;
+                }
             }
             
             if (particle.x < 0 || particle.x > this._canvas.width || 
@@ -688,32 +707,29 @@ const AdvancedWindAnimationLayer = L.Layer.extend({
                 return;
             }
             
-            // Jasna biała cząstka z mocnym glow
-            const alpha = Math.max(0.4, 1 - particle.age / WIND_VIZ_CONFIG.PARTICLE_LIFESPAN);
+            const alpha = Math.max(0.5, 1 - particle.age / WIND_VIZ_CONFIG.PARTICLE_LIFESPAN);
             
-            // Rysuj cząstkę jako linię
+            // Rysuj linię cząstki
             this._ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-            this._ctx.shadowColor = `rgba(200, 220, 255, ${alpha * 0.8})`;
-            this._ctx.shadowBlur = 6;
+            this._ctx.lineWidth = 2.5;
+            this._ctx.shadowColor = `rgba(200, 220, 255, ${alpha * 0.7})`;
+            this._ctx.shadowBlur = 5;
             
-            this._ctx.beginPath();
             this._ctx.moveTo(oldX, oldY);
             this._ctx.lineTo(particle.x, particle.y);
-            this._ctx.stroke();
             
-            // Dodatkowy punkt na końcu dla lepszej widoczności
+            // Punkt na końcu
             this._ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
-            this._ctx.beginPath();
             this._ctx.arc(particle.x, particle.y, 1.5, 0, Math.PI * 2);
-            this._ctx.fill();
         });
         
+        this._ctx.stroke();
+        this._ctx.fill();
         this._ctx.shadowBlur = 0;
-        this._animationFrame = requestAnimationFrame(() => this._animate());
     }
 });
 
-// === AdvancedWindControlPanel - Panel sterowania (UPROSZCZONY) ===
+// === AdvancedWindControlPanel - Panel sterowania (KOMPAKTOWY) ===
 const AdvancedWindControlPanel = L.Control.extend({
     options: {
         position: 'topleft'
@@ -723,11 +739,12 @@ const AdvancedWindControlPanel = L.Control.extend({
         this._map = map;
         this._container = L.DomUtil.create('div', 'leaflet-control wind-control-panel');
         this._container.style.background = 'rgba(30, 35, 45, 0.95)';
-        this._container.style.padding = '15px';
+        this._container.style.padding = '12px';
         this._container.style.borderRadius = '8px';
         this._container.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
-        this._container.style.minWidth = '280px';
-        this._container.style.maxHeight = '85vh';
+        this._container.style.minWidth = '260px';
+        this._container.style.maxWidth = '280px';
+        this._container.style.maxHeight = '90vh';
         this._container.style.overflowY = 'auto';
         
         this._render();
@@ -737,84 +754,79 @@ const AdvancedWindControlPanel = L.Control.extend({
     _render: function() {
         this._container.innerHTML = `
             <div style="color: #e0e0e0;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <h3 style="margin: 0; font-size: 16px; font-weight: 600;">
-                        <span style="margin-right: 8px;">🎛️</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h3 style="margin: 0; font-size: 15px; font-weight: 600;">
+                        <span style="margin-right: 6px;">🎛️</span>
                         Kontrola Wizualizacji
                     </h3>
-                    <button id="collapse-panel" style="background: transparent; border: none; color: #9ca3af; cursor: pointer; font-size: 18px;">
+                    <button id="collapse-panel" style="background: transparent; border: none; color: #9ca3af; cursor: pointer; font-size: 16px; padding: 0;">
                         ▲
                     </button>
                 </div>
                 
                 <div id="panel-content">
-                    <div style="margin-bottom: 20px;">
-                        <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
                             Warstwy
                         </div>
-                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 8px; border-radius: 6px; transition: background 0.2s;">
-                                <input type="checkbox" id="toggle-heatmap" checked style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;">
-                                <div style="flex: 1;">
-                                    <div style="font-size: 14px; font-weight: 500;">Mapa cieplna</div>
-                                    <div style="font-size: 11px; color: #9ca3af;">Pole prędkości wiatru</div>
-                                </div>
-                            </label>
-                            
-                            <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 8px; border-radius: 6px; transition: background 0.2s;">
-                                <input type="checkbox" id="toggle-streamlines" checked style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;">
-                                <div style="flex: 1;">
-                                    <div style="font-size: 14px; font-weight: 500;">Linie przepływu</div>
-                                    <div style="font-size: 11px; color: #9ca3af;">Ścieżki wiatru</div>
-                                </div>
-                            </label>
-                            
-                            <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 8px; border-radius: 6px; transition: background 0.2s;">
-                                <input type="checkbox" id="toggle-particles" checked style="margin-right: 10px; width: 16px; height: 16px; cursor: pointer;">
-                                <div style="flex: 1;">
-                                    <div style="font-size: 14px; font-weight: 500;">Animacja cząstek</div>
-                                    <div style="font-size: 11px; color: #9ca3af;">Dynamiczny przepływ</div>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
-                            Narzędzia
-                        </div>
                         <div style="display: flex; flex-direction: column; gap: 6px;">
-                            <button id="tool-export" class="tool-button" style="display: flex; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; background: rgba(96, 165, 250, 0.1); color: #e0e0e0; cursor: pointer; transition: all 0.2s;">
-                                <span style="margin-right: 10px;">💾</span>
-                                <span style="font-size: 13px;">Eksport danych JSON</span>
-                            </button>
+                            <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 6px; border-radius: 5px; transition: background 0.2s;">
+                                <input type="checkbox" id="toggle-heatmap" checked style="margin-right: 8px; width: 14px; height: 14px; cursor: pointer;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 13px; font-weight: 500;">Mapa cieplna</div>
+                                    <div style="font-size: 10px; color: #9ca3af;">Pole prędkości</div>
+                                </div>
+                            </label>
+                            
+                            <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 6px; border-radius: 5px; transition: background 0.2s;">
+                                <input type="checkbox" id="toggle-streamlines" checked style="margin-right: 8px; width: 14px; height: 14px; cursor: pointer;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 13px; font-weight: 500;">Linie przepływu</div>
+                                    <div style="font-size: 10px; color: #9ca3af;">Ścieżki wiatru</div>
+                                </div>
+                            </label>
+                            
+                            <label class="layer-toggle" style="display: flex; align-items: center; cursor: pointer; padding: 6px; border-radius: 5px; transition: background 0.2s;">
+                                <input type="checkbox" id="toggle-particles" checked style="margin-right: 8px; width: 14px; height: 14px; cursor: pointer;">
+                                <div style="flex: 1;">
+                                    <div style="font-size: 13px; font-weight: 500;">Animacja cząstek</div>
+                                    <div style="font-size: 10px; color: #9ca3af;">Dynamika</div>
+                                </div>
+                            </label>
                         </div>
                     </div>
                     
-                    <div style="margin-bottom: 20px;">
-                        <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
                             Intensywność
                         </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
                             <input type="range" id="opacity-slider" min="0" max="100" value="70" style="flex: 1; cursor: pointer;">
-                            <span id="opacity-value" style="min-width: 35px; font-size: 13px;">70%</span>
+                            <span id="opacity-value" style="min-width: 32px; font-size: 12px;">70%</span>
                         </div>
                     </div>
                     
-                    <div style="margin-bottom: 20px;">
-                        <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">
                             Gęstość cząstek
                         </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <input type="range" id="particle-density-slider" min="500" max="5000" step="500" value="2000" style="flex: 1; cursor: pointer;">
-                            <span id="particle-density-value" style="min-width: 45px; font-size: 13px;">2000</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="range" id="particle-density-slider" min="200" max="2000" step="200" value="800" style="flex: 1; cursor: pointer;">
+                            <span id="particle-density-value" style="min-width: 38px; font-size: 12px;">800</span>
                         </div>
                     </div>
                     
-                    <button id="reset-view" style="width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; color: #fca5a5; cursor: pointer; font-size: 13px; transition: all 0.2s;">
-                        <span style="margin-right: 8px;">🔄</span>
-                        Resetuj widok
-                    </button>
+                    <div style="display: flex; gap: 6px;">
+                        <button id="tool-export" class="tool-button" style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px; border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; background: rgba(96, 165, 250, 0.1); color: #e0e0e0; cursor: pointer; transition: all 0.2s; font-size: 12px;">
+                            <span style="margin-right: 6px;">💾</span>
+                            <span>Eksport</span>
+                        </button>
+                        
+                        <button id="reset-view" style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 5px; color: #fca5a5; cursor: pointer; font-size: 12px; transition: all 0.2s;">
+                            <span style="margin-right: 6px;">🔄</span>
+                            <span>Reset</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -938,7 +950,7 @@ const AdvancedWindControlPanel = L.Control.extend({
     }
 });
 
-// === AdvancedLegendControl - Legenda z CFD kolorystyką ===
+// === AdvancedLegendControl - Legenda ===
 const AdvancedLegendControl = L.Control.extend({
     options: {
         position: 'bottomright'
@@ -1034,12 +1046,14 @@ function initAdvancedWindVisualization() {
         });
     }
     
+    // WAŻNE: Kolejność dodawania warstw (odwrotna do z-index)
     const velocityLayer = new AdvancedVelocityLayer(windData, windData.bounds);
     const streamlineLayer = new StreamlineLayer(windData, windData.bounds);
     const animationLayer = new AdvancedWindAnimationLayer(windData, windData.bounds);
     const legendControl = new AdvancedLegendControl();
     const controlPanel = new AdvancedWindControlPanel();
     
+    // Dodaj w kolejności: heatmap -> streamlines -> particles (z-index kontroluje wyświetlanie)
     velocityLayer.addTo(maps.wind);
     streamlineLayer.addTo(maps.wind);
     animationLayer.addTo(maps.wind);
@@ -1057,8 +1071,9 @@ function initAdvancedWindVisualization() {
         control: controlPanel
     };
     
-    console.log('✅ Wizualizacja wiatru zainicjalizowana');
+    console.log('✅ Wizualizacja wiatru zainicjalizowana (zoptymalizowana)');
 }
+
 
 // ============================================================================
 // MODUŁ 7: STYLE CSS
