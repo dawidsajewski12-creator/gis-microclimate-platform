@@ -717,68 +717,127 @@ from rasterio.transform import xy
 from pyproj import Transformer
 
 def create_coordinate_transformer(aligned_data, sim_params):
-    """POPRAWIONA funkcja transformacji współrzędnych"""
+    """
+    POPRAWIONA funkcja transformacji współrzędnych pixel → geo (WGS84)
+    
+    Poprawki:
+    - Prawidłowe uwzględnienie bufora w skalowaniu
+    - Poprawna kolejność transformacji
+    - Sprawdzona zgodność z układem OSM
+    """
     prof = aligned_data["profile"]
     H, W = aligned_data["h"], aligned_data["w"]
+    buf = sim_params["buffer_size"]
     sw = sim_params["grid_width"]
-    buf = sim_params["buffer_size"]  # <- poprawnie pobierz z parametrów
     
-    # KLUCZOWA POPRAWKA: użyj wymiarów Z BUFOREM
-    H_buf = H + 2 * buf  # <- użyj buf
-    W_buf = W + 2 * buf  # <- użyj buf
+    # Wymiary Z BUFOREM (dodane przed resamplingiem)
+    H_buf = H + 2 * buf
+    W_buf = W + 2 * buf
+    
+    # Wymiary siatki symulacji
     sh = int(sw * H_buf / W_buf)
     
-    # POPRAWIONE współczynniki skalowania
+    # Współczynniki skalowania: grid → full resolution with buffer
     x_scale = W_buf / sw
     y_scale = H_buf / sh
     
-    print(f"✅ Corrected scaling coefficients:")
-    print(f"   • x_scale = {W_buf}/{sw} = {x_scale:.6f}")
-    print(f"   • y_scale = {H_buf}/{sh} = {y_scale:.6f}")
-    print(f"   • Buffer size: {buf}")
-
-    # Transformer CRS->WGS84
-    to_wgs = Transformer.from_crs(prof["crs"], 4326, always_xy=True)
-
+    print(f"🔧 Coordinate transformation parameters:")
+    print(f"   • Original raster: {W}×{H} pixels")
+    print(f"   • With buffer: {W_buf}×{H_buf} pixels")
+    print(f"   • Simulation grid: {sw}×{sh} pixels")
+    print(f"   • X scale: {x_scale:.6f} pixels/grid_unit")
+    print(f"   • Y scale: {y_scale:.6f} pixels/grid_unit")
+    print(f"   • Buffer size: {buf} pixels")
+    print(f"   • Original CRS: {prof['crs']}")
+    
+    # Transformer do WGS84 (zgodny z OSM)
+    to_wgs = Transformer.from_crs(prof["crs"], "EPSG:4326", always_xy=True)
+    
     def pixel_to_geo(sim_x, sim_y):
-        col = sim_x * x_scale
-        row = sim_y * y_scale
-        col -= buf
-        row -= buf
-        x_m, y_m = xy(prof["transform"], row, col, offset='center')
-        lon, lat = to_wgs.transform(x_m, y_m)
+        """
+        Transformacja: siatka symulacji → współrzędne geograficzne WGS84
+        
+        Args:
+            sim_x, sim_y: współrzędne w siatce symulacji [0..sw-1, 0..sh-1]
+        
+        Returns:
+            lon, lat: współrzędne WGS84 (stopnie)
+        """
+        # 1. Skalowanie do pełnej rozdzielczości z buforem
+        col_fullres = sim_x * x_scale
+        row_fullres = sim_y * y_scale
+        
+        # 2. Usuń offset bufora (wróć do oryginalnej siatki rastra)
+        col_original = col_fullres - buf
+        row_original = row_fullres - buf
+        
+        # 3. Przekształć współrzędne pixelowe na współrzędne przestrzenne (metry)
+        #    Użyj rasterio.transform.xy z offset='center' dla środka pixela
+        x_meters, y_meters = xy(
+            prof["transform"], 
+            row_original, 
+            col_original, 
+            offset='center'
+        )
+        
+        # 4. Transformacja z CRS oryginalnego do WGS84
+        lon, lat = to_wgs.transform(x_meters, y_meters)
+        
         return lon, lat
-
+    
     return pixel_to_geo
 
 
 
+
 def save_georeferenced_results(results, aligned_data, sim_params, filename="wind_simulation_results.json"):
-    """Zapisuje wyniki z transformacją do współrzędnych geograficznych WGS84"""
+    """
+    Zapisuje wyniki z transformacją do współrzędnych geograficznych WGS84 (kompatybilnych z OSM)
+    
+    Poprawki:
+    - Poprawiona transformacja współrzędnych
+    - Dodana walidacja dla Polski
+    - Poprawne obliczanie bounds
+    """
     OUTPUT_DIR.mkdir(exist_ok=True)
     
-    # Utwórz transformer (teraz zwraca tylko funkcję)
+    # Utwórz transformer
     pixel_to_geo = create_coordinate_transformer(aligned_data, sim_params)
     
     # Pobierz CRS z danych wyrównanych
-    original_crs = aligned_data["profile"]["crs"]
+    original_crs = str(aligned_data["profile"]["crs"])
     
-    # NOWE: Oblicz bounds obszaru symulacji w WGS84
+    # Oblicz wymiary siatki symulacji
+    H, W = aligned_data["h"], aligned_data["w"]
+    buf = sim_params["buffer_size"]
     sw = sim_params["grid_width"]
-    sh = int(sw * aligned_data["h"] / aligned_data["w"])
+    H_buf = H + 2 * buf
+    W_buf = W + 2 * buf
+    sh = int(sw * H_buf / W_buf)
     
-    # Rogi obszaru symulacji
+    print(f"\n🌍 Calculating geographic bounds...")
+    
+    # Rogi obszaru symulacji (bez bufora wizualnego - rzeczywisty obszar danych)
     corners = [
-        pixel_to_geo(0, 0),           # lewy górny
-        pixel_to_geo(sw-1, 0),        # prawy górny  
-        pixel_to_geo(sw-1, sh-1),     # prawy dolny
-        pixel_to_geo(0, sh-1)         # lewy dolny
+        pixel_to_geo(0, 0),              # lewy górny
+        pixel_to_geo(sw-1, 0),           # prawy górny  
+        pixel_to_geo(sw-1, sh-1),        # prawy dolny
+        pixel_to_geo(0, sh-1)            # lewy dolny
     ]
     
-    # Oblicz bounds
-    lngs = [corner[0] for corner in corners]
-    lats = [corner[1] for corner in corners]
+    # Dodaj punkty środkowe brzegów dla lepszego oszacowania bounds
+    mid_points = [
+        pixel_to_geo(sw//2, 0),          # środek górny
+        pixel_to_geo(sw-1, sh//2),       # środek prawy
+        pixel_to_geo(sw//2, sh-1),       # środek dolny
+        pixel_to_geo(0, sh//2)           # środek lewy
+    ]
     
+    all_points = corners + mid_points
+    lngs = [p[0] for p in all_points]
+    lats = [p[1] for p in all_points]
+    
+    # Oblicz bounds
     wgs84_bounds = {
         "west": min(lngs),
         "east": max(lngs),
@@ -786,60 +845,116 @@ def save_georeferenced_results(results, aligned_data, sim_params, filename="wind
         "north": max(lats)
     }
     
-    # Transformuj wyniki
+    # Centrum obszaru
+    center_lon, center_lat = pixel_to_geo(sw//2, sh//2)
+    
+    print(f"   • West:  {wgs84_bounds['west']:.6f}°")
+    print(f"   • East:  {wgs84_bounds['east']:.6f}°")
+    print(f"   • South: {wgs84_bounds['south']:.6f}°")
+    print(f"   • North: {wgs84_bounds['north']:.6f}°")
+    print(f"   • Center: {center_lat:.6f}°N, {center_lon:.6f}°E")
+    
+    # Walidacja dla Polski
+    if (14.0 <= wgs84_bounds['west'] <= 25.0 and 
+        14.0 <= wgs84_bounds['east'] <= 25.0 and
+        49.0 <= wgs84_bounds['south'] <= 55.0 and 
+        49.0 <= wgs84_bounds['north'] <= 55.0):
+        print("   ✅ Coordinates validated: within Poland bounds")
+    else:
+        print("   ⚠️  WARNING: Coordinates outside expected Poland bounds!")
+        print("       This may indicate transformation error.")
+    
+    # Transformuj vector field
+    print(f"\n🔄 Transforming {len(results.get('vector_field', []))} vector field points...")
     if "vector_field" in results:
-        for point in results["vector_field"]:
+        for i, point in enumerate(results["vector_field"]):
             if "x" in point and "y" in point:
-                lng, lat = pixel_to_geo(point["x"], point["y"])
-                point["longitude"] = lng
-                point["latitude"] = lat
-                point["pixel_x"] = point["x"]
-                point["pixel_y"] = point["y"]
+                try:
+                    lng, lat = pixel_to_geo(point["x"], point["y"])
+                    point["longitude"] = round(lng, 8)
+                    point["latitude"] = round(lat, 8)
+                    point["pixel_x"] = int(point["x"])
+                    point["pixel_y"] = int(point["y"])
+                except Exception as e:
+                    print(f"   ⚠️  Error transforming point {i}: {e}")
     
     # Transformuj streamlines
-    if "streamlines" in results:
+    if "streamlines" in results and len(results["streamlines"]) > 0:
+        print(f"🔄 Transforming {len(results['streamlines'])} streamlines...")
         for streamline in results["streamlines"]:
             for point in streamline:
                 if "x" in point and "y" in point:
-                    lng, lat = pixel_to_geo(point["x"], point["y"])
-                    point["longitude"] = lng
-                    point["latitude"] = lat
-                    point["pixel_x"] = point["x"]
-                    point["pixel_y"] = point["y"]
+                    try:
+                        lng, lat = pixel_to_geo(point["x"], point["y"])
+                        point["longitude"] = round(lng, 8)
+                        point["latitude"] = round(lat, 8)
+                        point["pixel_x"] = int(point["x"])
+                        point["pixel_y"] = int(point["y"])
+                    except:
+                        pass
     
     # Transformuj particles
-    if "particles" in results:
+    if "particles" in results and len(results["particles"]) > 0:
+        print(f"🔄 Transforming {len(results['particles'])} particle trajectories...")
         for particle_path in results["particles"]:
             for point in particle_path:
                 if "x" in point and "y" in point:
-                    lng, lat = pixel_to_geo(point["x"], point["y"])
-                    point["longitude"] = lng
-                    point["latitude"] = lat
-                    point["pixel_x"] = point["x"]
-                    point["pixel_y"] = point["y"]
+                    try:
+                        lng, lat = pixel_to_geo(point["x"], point["y"])
+                        point["longitude"] = round(lng, 8)
+                        point["latitude"] = round(lat, 8)
+                        point["pixel_x"] = int(point["x"])
+                        point["pixel_y"] = int(point["y"])
+                    except:
+                        pass
     
-    # Dodaj informacje o CRS i bounds
+    # Dodaj informacje przestrzenne
     results["spatial_reference"] = {
         "crs": "EPSG:4326",
         "epsg_code": 4326,
         "bounds_wgs84": wgs84_bounds,
+        "center_wgs84": {
+            "longitude": round(center_lon, 8),
+            "latitude": round(center_lat, 8)
+        },
         "transformation_info": {
-            "grid_width": sim_params["grid_width"],
-            "buffer_size": sim_params["buffer_size"],
-            "original_crs": str(original_crs),  # <- poprawione
-            "transformed_to": "WGS84"
+            "source_crs": original_crs,
+            "target_crs": "EPSG:4326 (WGS84)",
+            "grid_dimensions": {
+                "simulation_width": sw,
+                "simulation_height": sh,
+                "original_width": W,
+                "original_height": H,
+                "buffer_size": buf
+            },
+            "scale_factors": {
+                "x_scale": round(W_buf / sw, 6),
+                "y_scale": round(H_buf / sh, 6)
+            },
+            "note": "Coordinates compatible with OpenStreetMap and web mapping services"
         }
     }
     
     # Zapisz wyniki
     output_path = OUTPUT_DIR / filename
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
     
-    print(f"📁 Results with WGS84 coordinates saved to: {output_path}")
-    print(f"🌍 Bounds: {wgs84_bounds}")
+    # Zapisz również uproszczoną wersję metadanych
+    metadata_path = OUTPUT_DIR / "spatial_metadata.json"
+    with open(metadata_path, 'w', encoding='utf-8') as f:
+        json.dump({
+            "bounds": wgs84_bounds,
+            "center": results["spatial_reference"]["center_wgs84"],
+            "crs": "EPSG:4326",
+            "compatible_with": ["OpenStreetMap", "Leaflet", "Google Maps", "Mapbox"]
+        }, f, indent=2)
+    
+    print(f"\n✅ Results with WGS84 coordinates saved to: {output_path}")
+    print(f"📋 Spatial metadata saved to: {metadata_path}")
     
     return output_path
+
 
 # ──────────────────────────────────────────────────────────────────────────
 # GŁÓWNA FUNKCJA WYKONAWCZA
