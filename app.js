@@ -486,7 +486,7 @@ const AdvancedVelocityLayer = L.Layer.extend({
     }
 });
 
-// === StreamlineLayer - ZAAWANSOWANY GRADIENT Z INTERPOLACJĄ ===
+// === StreamlineLayer - KOLOROWE LINIE PRZEPŁYWU ZALEŻNE OD PRĘDKOŚCI ===
 const StreamlineLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
@@ -532,14 +532,14 @@ const StreamlineLayer = L.Layer.extend({
         const minMag = this._data.minMagnitude;
         const maxMag = this._data.maxMagnitude;
         
-        ctx.lineWidth = 2.8;
+        ctx.lineWidth = 2.5;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
         this._data.streamlines.forEach(streamline => {
             if (streamline.length < 2) return;
             
-            // Rysuj kolorowe segmenty
+            // Rysuj linię z gradientem kolorów
             for (let i = 0; i < streamline.length - 1; i++) {
                 const point1 = streamline[i];
                 const point2 = streamline[i + 1];
@@ -547,20 +547,18 @@ const StreamlineLayer = L.Layer.extend({
                 const pt1 = this._map.latLngToContainerPoint([point1.lat, point1.lng]);
                 const pt2 = this._map.latLngToContainerPoint([point2.lat, point2.lng]);
                 
-                // Średnia prędkość dla segmentu
+                // Średnia prędkość między dwoma punktami
                 const avgMagnitude = (point1.magnitude + point2.magnitude) / 2;
                 
-                // Kolor CFD z większą opacity
-                let color = getCFDColor(avgMagnitude, minMag, maxMag);
-                color = color.replace('rgba(', 'rgba(').replace('0.7)', '0.92)');
+                // Kolor zależny od prędkości (CFD palette)
+                const color = getCFDColor(avgMagnitude, minMag, maxMag);
                 
-                // Rysuj segment
-                ctx.strokeStyle = color;
+                // Zwiększ opacity dla lepszej widoczności
+                const enhancedColor = color.replace('0.7)', '0.9)');
                 
-                // Dodaj glow effect - mocniejszy dla wyższych prędkości
-                const glowIntensity = 0.3 + (avgMagnitude / maxMag) * 0.4;
-                ctx.shadowColor = color.replace(/[\d.]+\)$/, glowIntensity + ')');
-                ctx.shadowBlur = 5;
+                ctx.strokeStyle = enhancedColor;
+                ctx.shadowColor = enhancedColor;
+                ctx.shadowBlur = 3;
                 
                 ctx.beginPath();
                 ctx.moveTo(pt1.x, pt1.y);
@@ -570,10 +568,9 @@ const StreamlineLayer = L.Layer.extend({
         });
         
         ctx.shadowBlur = 0;
-        
-        console.log(`✅ Narysowano ${this._data.streamlines.length} kolorowych streamlines`);
     }
 });
+
 
 // === WindAnimationLayer - SZYBKO ZANIKAJĄCE I POJAWIAJĄCE SIĘ CZĄSTKI (NA WIERZCHU) ===
 const AdvancedWindAnimationLayer = L.Layer.extend({
