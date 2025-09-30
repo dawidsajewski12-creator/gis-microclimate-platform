@@ -486,7 +486,7 @@ const AdvancedVelocityLayer = L.Layer.extend({
     }
 });
 
-// === StreamlineLayer - PRZYWRÓCONE ORYGINALNE LINIE PRZEPŁYWU (W ŚRODKU) ===
+// === StreamlineLayer - ZAAWANSOWANY GRADIENT Z INTERPOLACJĄ ===
 const StreamlineLayer = L.Layer.extend({
     initialize: function(data, bounds) {
         this._data = data;
@@ -529,30 +529,49 @@ const StreamlineLayer = L.Layer.extend({
         const ctx = this._ctx;
         ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
         
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.lineWidth = 2;
+        const minMag = this._data.minMagnitude;
+        const maxMag = this._data.maxMagnitude;
+        
+        ctx.lineWidth = 2.8;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
-        ctx.shadowBlur = 4;
         
         this._data.streamlines.forEach(streamline => {
             if (streamline.length < 2) return;
             
-            ctx.beginPath();
-            const firstPoint = this._map.latLngToContainerPoint([streamline[0].lat, streamline[0].lng]);
-            ctx.moveTo(firstPoint.x, firstPoint.y);
-            
-            for (let i = 1; i < streamline.length; i++) {
-                const point = this._map.latLngToContainerPoint([streamline[i].lat, streamline[i].lng]);
-                ctx.lineTo(point.x, point.y);
+            // Rysuj kolorowe segmenty
+            for (let i = 0; i < streamline.length - 1; i++) {
+                const point1 = streamline[i];
+                const point2 = streamline[i + 1];
+                
+                const pt1 = this._map.latLngToContainerPoint([point1.lat, point1.lng]);
+                const pt2 = this._map.latLngToContainerPoint([point2.lat, point2.lng]);
+                
+                // Średnia prędkość dla segmentu
+                const avgMagnitude = (point1.magnitude + point2.magnitude) / 2;
+                
+                // Kolor CFD z większą opacity
+                let color = getCFDColor(avgMagnitude, minMag, maxMag);
+                color = color.replace('rgba(', 'rgba(').replace('0.7)', '0.92)');
+                
+                // Rysuj segment
+                ctx.strokeStyle = color;
+                
+                // Dodaj glow effect - mocniejszy dla wyższych prędkości
+                const glowIntensity = 0.3 + (avgMagnitude / maxMag) * 0.4;
+                ctx.shadowColor = color.replace(/[\d.]+\)$/, glowIntensity + ')');
+                ctx.shadowBlur = 5;
+                
+                ctx.beginPath();
+                ctx.moveTo(pt1.x, pt1.y);
+                ctx.lineTo(pt2.x, pt2.y);
+                ctx.stroke();
             }
-            
-            ctx.stroke();
         });
         
         ctx.shadowBlur = 0;
+        
+        console.log(`✅ Narysowano ${this._data.streamlines.length} kolorowych streamlines`);
     }
 });
 
