@@ -152,6 +152,37 @@ function getViridisColor(value, min, max) {
     
     return `rgba(${r},${g},${b},0.5)`;
 }
+// Funkcja mapowania wartości na kolor - KLASYCZNA PALETA CFD (jet)
+function getCFDColor(value, min, max) {
+    const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    
+    let r, g, b;
+    
+    if (t < 0.125) {
+        r = 0;
+        g = 0;
+        b = Math.round(255 * (0.5 + t * 4));
+    } else if (t < 0.375) {
+        r = 0;
+        g = Math.round(255 * ((t - 0.125) * 4));
+        b = 255;
+    } else if (t < 0.625) {
+        r = Math.round(255 * ((t - 0.375) * 4));
+        g = 255;
+        b = Math.round(255 * (1 - (t - 0.375) * 4));
+    } else if (t < 0.875) {
+        r = 255;
+        g = Math.round(255 * (1 - (t - 0.625) * 4));
+        b = 0;
+    } else {
+        r = Math.round(255 * (1 - (t - 0.875) * 2));
+        g = 0;
+        b = 0;
+    }
+    
+    return `rgba(${r},${g},${b},0.7)`;
+}
+
 
 // ============================================================================
 // MODUŁ 3: GENEROWANIE BRAKUJĄCYCH DANYCH
