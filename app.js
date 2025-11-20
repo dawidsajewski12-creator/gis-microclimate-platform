@@ -1086,32 +1086,13 @@ const AdvancedLegendControl = L.Control.extend({
                     </div>
                 </div>
                 
-                <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <div style="font-size: 11px; color: #9ca3af; margin-bottom: 6px;">Skala Beauforta</div>
-                    <div style="font-size: 11px; color: #e0e0e0; line-height: 1.5;">
-                        ${this._getBeaufortDescription(max)}
-                    </div>
+                
                 </div>
             </div>
         `;
     },
     
-    _getBeaufortDescription: function(maxSpeed) {
-        if (maxSpeed < 0.5) return '0 - Cisza';
-        if (maxSpeed < 1.5) return '1 - Powiew';
-        if (maxSpeed < 3.3) return '2 - Lekki wiatr';
-        if (maxSpeed < 5.5) return '3 - Słaby wiatr';
-        if (maxSpeed < 7.9) return '4 - Umiarkowany';
-        if (maxSpeed < 10.7) return '5 - Dość silny';
-        if (maxSpeed < 13.8) return '6 - Silny wiatr';
-        if (maxSpeed < 17.1) return '7 - Bardzo silny';
-        if (maxSpeed < 20.7) return '8 - Wichura';
-        if (maxSpeed < 24.4) return '9 - Silna wichura';
-        if (maxSpeed < 28.4) return '10 - Sztorm';
-        if (maxSpeed < 32.6) return '11 - Gwałtowny sztorm';
-        return '12 - Huragan';
-    }
-});
+    });
 
 
 // ============================================================================
