@@ -1092,7 +1092,52 @@ const AdvancedLegendControl = L.Control.extend({
         `;
     },
     
-    });
+    _getBeaufortDescription: function(maxSpeed) {
+        if (maxSpeed < 0.5) return '0 - Cisza';
+        if (maxSpeed < 1.5) return '1 - Powiew';
+        if (maxSpeed < 3.3) return '2 - Lekki wiatr';
+        if (maxSpeed < 5.5) return '3 - Słaby wiatr';
+        if (maxSpeed < 7.9) return '4 - Umiarkowany';
+        if (maxSpeed < 10.7) return '5 - Dość silny';
+        if (maxSpeed < 13.8) return '6 - Silny wiatr';
+        if (maxSpeed < 17.1) return '7 - Bardzo silny';
+        if (maxSpeed < 20.7) return '8 - Wichura';
+        if (maxSpeed < 24.4) return '9 - Silna wichura';
+        if (maxSpeed < 28.4) return '10 - Sztorm';
+        if (maxSpeed < 32.6) return '11 - Gwałtowny sztorm';
+        return '12 - Huragan';
+    }
+});
+
+
+// ============================================================================
+// MODUŁ 6: INICJALIZACJA GŁÓWNEJ WIZUALIZACJI
+// ============================================================================
+
+function initAdvancedWindVisualization() {
+    if (!windSimulationData || !maps.wind) {
+        console.error('❌ Brak danych lub mapy do wizualizacji');
+        return;
+    }
+    
+    console.log('🚀 Inicjalizacja zaawansowanej wizualizacji wiatru...');
+    
+    const windData = createWindDataAdapter(windSimulationData);
+    if (!windData) {
+        console.error('❌ Nie udało się przygotować danych');
+        return;
+    }
+    
+    if (window.advancedWindLayers) {
+        Object.values(window.advancedWindLayers).forEach(layer => {
+            if (layer && maps.wind.hasLayer(layer)) {
+                maps.wind.removeLayer(layer);
+            }
+        });
+    }
+    
+    const velocityLayer = new AdvancedVelocityLayer(windData
+});
 
 
 // ============================================================================
@@ -1122,12 +1167,14 @@ function initAdvancedWindVisualization() {
     }
     
     const velocityLayer = new AdvancedVelocityLayer(windData, windData.bounds);
-    const streamlineLayer = new StreamlineLayer(windData, windData.bounds);
-    const animationLayer = new AdvancedWindAnimationLayer(windData, windData.bounds);
-    const legendControl = new AdvancedLegendControl();
-    const controlPanel = new AdvancedWindControlPanel();
-    
-    velocityLayer.addTo(maps.wind);
+    // WYŁĄCZONE: const streamlineLayer = new StreamlineLayer(windData, windData.bounds);
+    // WYŁĄCZONE: //     const animationLayer = new AdvancedWindAnimationLayer(windData, windData.bounds);
+    //     //     const legendControl = new AdvancedLegendControl();
+    //     //     const controlPanel = new AdvancedWindControlPanel();
+    //     //     
+    //     //     velocityLayer.addTo(maps.wind);
+
+
     streamlineLayer.addTo(maps.wind);
     animationLayer.addTo(maps.wind);
     
@@ -1496,3 +1543,23 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Portfolio inicjalizacja...');
     loadWindSimulationData();
 });
+                    <div style="margin-top: 10px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 6px;">
+                        <label style="display: block; font-size: 12px; color: #e0e0e0; margin-bottom: 8px;">
+                            Przezroczystość mapy cieplnej
+                        </label>
+                        <input type="range" 
+                               id="velocity-opacity-slider" 
+                               min="0" 
+                               max="100" 
+                               value="60" 
+                               style="width: 100%; cursor: pointer;"
+                               oninput="
+                                   const opacity = this.value / 100;
+                                   document.getElementById('velocity-opacity-value').textContent = this.value + '%';
+                                   const canvas = document.querySelector('.velocity-canvas');
+                                   if (canvas) canvas.style.opacity = opacity;
+                               ">
+                        <div style="text-align: center; margin-top: 4px; font-size: 11px; color: #9ca3af;">
+                            <span id="velocity-opacity-value">60%</span>
+                        </div>
+                    </div>
