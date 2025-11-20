@@ -1064,6 +1064,14 @@ const AdvancedLegendControl = L.Control.extend({
         const labels = [max, max*0.75, max*0.5, max*0.25, min];
         
         this._container.innerHTML = `
+            <div style="background: rgba(30, 35, 45, 0.95); padding: 15px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <div style="font-weight: 600; font-size: 13px; color: #e0e0e0;">
+                        <span style="margin-right: 6px;">🌬️</span>
+                        Prędkość wiatru
+                    </div>
+                    <div style="font-size: 11px; color: #9ca3af;">m/s</div>
+                </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <div style="
                         width: 24px; 
@@ -1077,11 +1085,32 @@ const AdvancedLegendControl = L.Control.extend({
                         ${labels.map(val => `<span style="line-height: 1;">${val.toFixed(1)}</span>`).join('')}
                     </div>
                 </div>
+                
+                <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size: 11px; color: #9ca3af; margin-bottom: 6px;">Skala Beauforta</div>
+                    <div style="font-size: 11px; color: #e0e0e0; line-height: 1.5;">
+                        ${this._getBeaufortDescription(max)}
+                    </div>
+                </div>
             </div>
         `;
     },
     
-
+    _getBeaufortDescription: function(maxSpeed) {
+        if (maxSpeed < 0.5) return '0 - Cisza';
+        if (maxSpeed < 1.5) return '1 - Powiew';
+        if (maxSpeed < 3.3) return '2 - Lekki wiatr';
+        if (maxSpeed < 5.5) return '3 - Słaby wiatr';
+        if (maxSpeed < 7.9) return '4 - Umiarkowany';
+        if (maxSpeed < 10.7) return '5 - Dość silny';
+        if (maxSpeed < 13.8) return '6 - Silny wiatr';
+        if (maxSpeed < 17.1) return '7 - Bardzo silny';
+        if (maxSpeed < 20.7) return '8 - Wichura';
+        if (maxSpeed < 24.4) return '9 - Silna wichura';
+        if (maxSpeed < 28.4) return '10 - Sztorm';
+        if (maxSpeed < 32.6) return '11 - Gwałtowny sztorm';
+        return '12 - Huragan';
+    }
 });
 
 
