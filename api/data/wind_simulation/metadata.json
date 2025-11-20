@@ -1,0 +1,18 @@
+{
+  "version": 1763624399.87119,
+  "type": "wind_simulation",
+  "last_update": "2025-11-20T07:40:06.292202+00:00",
+  "data_points": {
+    "vectors": 13410,
+    "streamlines": 171,
+    "particles": 952
+  },
+  "bounds": {
+    "west": 22.92209163036717,
+    "east": 22.932551544587508,
+    "south": 54.10432676431132,
+    "north": 54.107754452820885
+  },
+  "checksum": "1928fe7bb98740d090790464d16f6618",
+  "file_size_bytes": 54895152
+}
