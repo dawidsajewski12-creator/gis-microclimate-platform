@@ -1086,7 +1086,11 @@ const AdvancedLegendControl = L.Control.extend({
                     </div>
                 </div>
                 
-                
+                <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="font-size: 11px; color: #9ca3af; margin-bottom: 6px;">Skala Beauforta</div>
+                    <div style="font-size: 11px; color: #e0e0e0; line-height: 1.5;">
+                        ${this._getBeaufortDescription(max)}
+                    </div>
                 </div>
             </div>
         `;
@@ -1136,45 +1140,13 @@ function initAdvancedWindVisualization() {
         });
     }
     
-    const velocityLayer = new AdvancedVelocityLayer(windData
-});
-
-
-// ============================================================================
-// MODUŁ 6: INICJALIZACJA GŁÓWNEJ WIZUALIZACJI
-// ============================================================================
-
-function initAdvancedWindVisualization() {
-    if (!windSimulationData || !maps.wind) {
-        console.error('❌ Brak danych lub mapy do wizualizacji');
-        return;
-    }
-    
-    console.log('🚀 Inicjalizacja zaawansowanej wizualizacji wiatru...');
-    
-    const windData = createWindDataAdapter(windSimulationData);
-    if (!windData) {
-        console.error('❌ Nie udało się przygotować danych');
-        return;
-    }
-    
-    if (window.advancedWindLayers) {
-        Object.values(window.advancedWindLayers).forEach(layer => {
-            if (layer && maps.wind.hasLayer(layer)) {
-                maps.wind.removeLayer(layer);
-            }
-        });
-    }
-    
     const velocityLayer = new AdvancedVelocityLayer(windData, windData.bounds);
-    // WYŁĄCZONE: const streamlineLayer = new StreamlineLayer(windData, windData.bounds);
-    // WYŁĄCZONE: //     const animationLayer = new AdvancedWindAnimationLayer(windData, windData.bounds);
-    //     //     const legendControl = new AdvancedLegendControl();
-    //     //     const controlPanel = new AdvancedWindControlPanel();
-    //     //     
-    //     //     velocityLayer.addTo(maps.wind);
-
-
+    const streamlineLayer = new StreamlineLayer(windData, windData.bounds);
+    const animationLayer = new AdvancedWindAnimationLayer(windData, windData.bounds);
+    const legendControl = new AdvancedLegendControl();
+    const controlPanel = new AdvancedWindControlPanel();
+    
+    velocityLayer.addTo(maps.wind);
     streamlineLayer.addTo(maps.wind);
     animationLayer.addTo(maps.wind);
     
@@ -1543,23 +1515,3 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Portfolio inicjalizacja...');
     loadWindSimulationData();
 });
-                    <div style="margin-top: 10px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 6px;">
-                        <label style="display: block; font-size: 12px; color: #e0e0e0; margin-bottom: 8px;">
-                            Przezroczystość mapy cieplnej
-                        </label>
-                        <input type="range" 
-                               id="velocity-opacity-slider" 
-                               min="0" 
-                               max="100" 
-                               value="60" 
-                               style="width: 100%; cursor: pointer;"
-                               oninput="
-                                   const opacity = this.value / 100;
-                                   document.getElementById('velocity-opacity-value').textContent = this.value + '%';
-                                   const canvas = document.querySelector('.velocity-canvas');
-                                   if (canvas) canvas.style.opacity = opacity;
-                               ">
-                        <div style="text-align: center; margin-top: 4px; font-size: 11px; color: #9ca3af;">
-                            <span id="velocity-opacity-value">60%</span>
-                        </div>
-                    </div>
