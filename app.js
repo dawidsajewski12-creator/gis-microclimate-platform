@@ -1,4 +1,104 @@
 // ============================================================================
+// MODUŁ 0: DATA MANAGER - Inteligentne ładowanie i cache'owanie
+// ============================================================================
+const DataManager = {
+    cache: new Map(),
+    checksums: new Map(),
+    
+    async loadData(dataType = 'wind', forceRefresh = false) {
+        const cacheKey = `${dataType}_data`;
+        const retryLimit = 3;
+        let attempt = 0;
+        
+        while (attempt < retryLimit) {
+            try {
+                // OPCJA 1: Pobierz z GitHub Pages (api/data/wind_simulation/current.json)
+                let dataUrl = `api/data/${dataType}_simulation/current.json?t=${Date.now()}`;
+                let metaUrl = `api/data/${dataType}_simulation/metadata.json?t=${Date.now()}`;
+                
+                console.log(`📡 Próba ${attempt + 1}/${retryLimit}: Ładowanie z ${dataUrl}`);
+                
+                // Pobierz metadata
+                const metaResponse = await fetch(metaUrl);
+                let metadata = null;
+                
+                if (metaResponse.ok) {
+                    metadata = await metaResponse.json();
+                    console.log(`✅ Metadane załadowane:`, metadata);
+                    
+                    // Sprawdź czy dane się zmieniły (checksum)
+                    if (!forceRefresh && this.checksums.get(cacheKey) === metadata.checksum) {
+                        console.log(`📦 ${dataType} data już w cache (checksum match)`);
+                        return this.cache.get(cacheKey);
+                    }
+                }
+                
+                // Pobierz pełne dane
+                const dataResponse = await fetch(dataUrl);
+                if (!dataResponse.ok) {
+                    throw new Error(`HTTP ${dataResponse.status}`);
+                }
+                
+                const data = await dataResponse.json();
+                console.log(`✅ Dane załadowane:`, data);
+                
+                // Walidacja struktury danych
+                if (!data.vector_field || data.vector_field.length === 0) {
+                    throw new Error('Brak vector_field w danych');
+                }
+                
+                // Cache + Checksum
+                this.cache.set(cacheKey, data);
+                if (metadata) {
+                    this.checksums.set(cacheKey, metadata.checksum);
+                }
+                
+                // UI feedback
+                this.showDataUpdateNotification({
+                    type: dataType,
+                    timestamp: metadata ? metadata.last_update : new Date().toISOString(),
+                    points: metadata ? metadata.data_points : { vectors: data.vector_field.length }
+                });
+                
+                return data;
+                
+            } catch (error) {
+                console.error(`❌ Próba ${attempt + 1} failed:`, error);
+                attempt++;
+                
+                if (attempt < retryLimit) {
+                    await new Promise(r => setTimeout(r, 1000 * attempt));
+                }
+            }
+        }
+        
+        // Fallback: zwróć cached dane
+        const cached = this.cache.get(cacheKey);
+        if (cached) {
+            console.warn(`⚠️ Używam cached danych po ${retryLimit} próbach`);
+            return cached;
+        }
+        
+        console.error(`❌ Nie mogę załadować ${dataType} po ${retryLimit} próbach`);
+        return null;
+    },
+    
+    showDataUpdateNotification(info) {
+        const badge = document.querySelector('.data-update-badge');
+        if (badge) {
+            const timeStr = new Date(info.timestamp).toLocaleTimeString('pl-PL');
+            badge.innerHTML = `
+                <span class="pulse-dot"></span>
+                <span class="data-type">${info.type.toUpperCase()}</span>
+                <span class="update-time">${timeStr}</span>
+                <span class="data-points">→ ${info.points.vectors || info.points.streamlines || '?'} pts</span>
+            `;
+            badge.style.animation = 'slideIn 0.5s ease-out';
+        }
+    }
+};
+
+// ============================================================================
 // MODUŁ 1: KONFIGURACJA I DANE
 // ============================================================================
 
@@ -290,13 +390,18 @@ function generateStreamlines(vectorField, count = 50) {
 
 async function loadWindSimulationData() {
     try {
-        // ZMIENIONA ŚCIEŻKA
-        const response = await fetch('api/data/wind_simulation/current.json');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        console.log('🔄 Ładuję dane symulacji wiatru...');
+        
+        // Użyj nowego DataManager
+        windSimulationData = await DataManager.loadData('wind', false);
+        
+        if (!windSimulationData) {
+            console.error('❌ DataManager nie zwrócił danych');
+            return null;
         }
-        windSimulationData = await response.json();
+        
         console.log('✅ Dane symulacji wiatru załadowane:', windSimulationData.metadata);
+
         
         // Walidacja danych
         if (windSimulationData.vector_field && windSimulationData.vector_field.length > 0) {
@@ -1396,4 +1501,17 @@ document.addEventListener('DOMContentLoaded', () => {
     initContactForm();
     
     console.log('✅ Aplikacja zainicjalizowana');
+});
+
+
+// Auto-refresh co godzinę
+setInterval(() => {
+    console.log('🔄 Auto-refresh: Ładuję nowe dane...');
+    DataManager.loadData('wind', true);
+}, 3600000);
+
+// Załaduj dane przy starcie
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Portfolio inicjalizacja...');
+    loadWindSimulationData();
 });
