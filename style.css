@@ -1872,3 +1872,76 @@ textarea.form-control {
     font-size: 12px;
 }
 
+
+
+/* ============================================================================ */
+/* DATA STATUS BADGE STYLES */
+/* ============================================================================ */
+
+.data-status-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+.data-update-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    background: linear-gradient(135deg, rgba(33, 128, 141, 0.12), rgba(50, 184, 198, 0.08));
+    border: 1px solid rgba(50, 184, 198, 0.25);
+    border-radius: 8px;
+    font-size: 11px;
+    color: rgba(50, 184, 198, 0.9);
+    font-weight: 500;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: slideIn 0.4s ease-out;
+    transition: all 0.3s ease;
+}
+
+.data-update-badge:hover {
+    background: linear-gradient(135deg, rgba(33, 128, 141, 0.18), rgba(50, 184, 198, 0.12));
+    border-color: rgba(50, 184, 198, 0.35);
+}
+
+.pulse-dot {
+    width: 6px;
+    height: 6px;
+    background: rgba(50, 184, 198, 1);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(50, 184, 198, 0.6);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(0.9);
+    }
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(110%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    .data-update-badge {
+        background: linear-gradient(135deg, rgba(33, 128, 141, 0.15), rgba(50, 184, 198, 0.1));
+        border-color: rgba(50, 184, 198, 0.3);
+    }
+}
