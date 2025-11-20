@@ -1064,14 +1064,6 @@ const AdvancedLegendControl = L.Control.extend({
         const labels = [max, max*0.75, max*0.5, max*0.25, min];
         
         this._container.innerHTML = `
-            <div style="background: rgba(30, 35, 45, 0.95); padding: 15px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                    <div style="font-weight: 600; font-size: 13px; color: #e0e0e0;">
-                        <span style="margin-right: 6px;">🌬️</span>
-                        Prędkość wiatru
-                    </div>
-                    <div style="font-size: 11px; color: #9ca3af;">m/s</div>
-                </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <div style="
                         width: 24px; 
